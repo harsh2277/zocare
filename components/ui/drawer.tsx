@@ -47,13 +47,13 @@ export const Drawer: React.FC<DrawerProps> = ({
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-md bg-white border-l border-neutral-200/80 h-full flex flex-col justify-between transform transition-transform duration-300 ease-in-out animate-drawer-in rounded-l-[24px] shadow-[-20px_0_50px_-10px_rgba(0,0,0,0.12)] overflow-hidden"
+        className="w-full max-w-md bg-white border-l border-neutral-200/80 h-full flex flex-col justify-between transform transition-transform duration-300 ease-in-out animate-drawer-in rounded-l-[24px] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100 bg-neutral-50/50">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary-50 border border-primary-100 flex items-center justify-center text-primary-600 shadow-sm shrink-0">
+            <div className="h-10 w-10 rounded-xl bg-primary-50 border border-primary-100 flex items-center justify-center text-primary-600 shrink-0">
               <HugeiconsIcon icon={UserIcon} className="h-5 w-5" />
             </div>
             <div>
@@ -79,7 +79,7 @@ export const Drawer: React.FC<DrawerProps> = ({
           <Button variant="outline" size="md" onClick={onClose} className="flex-1 font-bold">
             {cancelText}
           </Button>
-          <Button variant="primary" size="md" onClick={handleConfirm} className="flex-1 font-bold shadow-sm shadow-primary-600/10">
+          <Button variant="primary" size="md" onClick={handleConfirm} className="flex-1 font-bold">
             {confirmText}
           </Button>
         </div>

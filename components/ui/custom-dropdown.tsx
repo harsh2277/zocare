@@ -78,7 +78,7 @@ export const SearchDropdown: React.FC<SearchDropdownProps> = ({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1.5 bg-white border border-neutral-200/80 rounded-md shadow-lg max-h-60 overflow-hidden flex flex-col">
+          <div className="absolute z-50 w-full mt-1.5 bg-white border border-neutral-200/80 rounded-md max-h-60 overflow-hidden flex flex-col">
             {/* Search Input inside Dropdown */}
             <div className="p-2 border-b border-neutral-100 flex items-center gap-2 bg-neutral-50/50">
               <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 text-neutral-400 shrink-0" />
@@ -206,7 +206,7 @@ export const ComboboxDropdown: React.FC<ComboboxDropdownProps> = ({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1.5 bg-white border border-neutral-200/80 rounded-md shadow-lg max-h-52 overflow-y-auto">
+          <div className="absolute z-50 w-full mt-1.5 bg-white border border-neutral-200/80 rounded-md max-h-52 overflow-y-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt) => {
                 const isSelected = inputValue.toLowerCase() === opt.label.toLowerCase();

@@ -25,7 +25,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     // Style configurations matching 4px border-radius explicitly via rounded-[4px]
-    const baseStyles = "inline-flex items-center justify-center font-sans font-semibold transition-all duration-200 active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:pointer-events-none rounded-md";
+    const baseStyles = "inline-flex items-center justify-center whitespace-nowrap font-sans font-semibold transition-all duration-200 active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:pointer-events-none rounded-md";
 
     const variantStyles = {
       primary: "bg-primary-600 hover:bg-primary-700 text-white border border-primary-750/15 focus:ring-2 focus:ring-primary-500/20",

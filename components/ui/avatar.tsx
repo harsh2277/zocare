@@ -46,7 +46,7 @@ export const Avatar: React.FC<AvatarProps> = ({
       {/* Avatar Box */}
       <div className={`
         ${sizeClasses[size]} 
-        rounded-full overflow-hidden border border-neutral-200 bg-neutral-100 flex items-center justify-center font-sans font-bold text-neutral-600 shadow-sm
+        rounded-full overflow-hidden border border-neutral-200 bg-neutral-100 flex items-center justify-center font-sans font-bold text-neutral-600
       `}>
         {src && !hasError ? (
           <img 

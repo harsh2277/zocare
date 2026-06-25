@@ -59,7 +59,7 @@ export const Tabs: React.FC<TabsProps> = ({
                 className={`
                   px-4 py-1.5 text-xs font-bold rounded-md tracking-tight transition-all duration-200 cursor-pointer focus:outline-none select-none flex items-center gap-1.5
                   ${isActive 
-                    ? "bg-white text-neutral-900 shadow-sm" 
+                    ? "bg-white text-neutral-900" 
                     : "text-neutral-500 hover:text-neutral-800"}
                 `}
               >

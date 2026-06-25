@@ -32,7 +32,7 @@ export const Stepper: React.FC<StepperProps> = ({
               <div className={`
                 h-9 w-9 rounded-full border flex items-center justify-center font-bold text-sm transition-all duration-300 z-10 shrink-0
                 ${isCompleted 
-                  ? "bg-primary-600 border-primary-600 text-white shadow-sm shadow-primary-600/10" 
+                  ? "bg-primary-600 border-primary-600 text-white" 
                   : isActive
                   ? "bg-white border-primary-600 text-primary-600 ring-2 ring-primary-500/10"
                   : "bg-white border-neutral-200 text-neutral-400"}

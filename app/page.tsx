@@ -41,7 +41,7 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("tab-profile");
-  
+
   const [toasts, setToasts] = useState<{ id: string; message: string; type: "success" | "info" | "warning" | "error" }[]>([]);
 
   const addToast = (message: string, type: "success" | "info" | "warning" | "error") => {
@@ -240,7 +240,7 @@ export default function Home() {
           </div>
           <span className="text-xl font-black text-primary-700 tracking-tight">zocare</span>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" leftIcon={Calendar01Icon}>
             Bookings
@@ -254,7 +254,7 @@ export default function Home() {
       {/* Main Showcase */}
       <main className="max-w-6xl mx-auto px-6 py-16 space-y-16 flex-1">
         {/* Title Block */}
-        <section className="text-center space-y-4 max-w-3xl mx-auto">
+        <section className="text-center space-y-4 max-w-5xl mx-auto">
           <span className="px-3.5 py-1.5 rounded-[4px] bg-primary-50 text-primary-700 text-xs font-bold tracking-wide uppercase border border-primary-200">
             Brand Palette & Theme System
           </span>
@@ -414,7 +414,7 @@ export default function Home() {
                 <Button variant="primary" size="lg">Large Button</Button>
                 <Button variant="primary" size="md" leftIcon={Add01Icon}>Left Icon</Button>
                 <Button variant="primary" size="md" rightIcon={ArrowRight01Icon}>Right Icon</Button>
-                
+
                 {/* Focused State mock via border active styling */}
                 <Button variant="primary" size="md" className="ring-2 ring-primary-500/20">Focused State</Button>
                 <Button variant="primary" size="md" disabled>Disabled State</Button>
@@ -431,7 +431,7 @@ export default function Home() {
                 <Button variant="outline" size="lg">Large Outline</Button>
                 <Button variant="outline" size="md" leftIcon={Add01Icon}>Left Icon</Button>
                 <Button variant="outline" size="md" rightIcon={ArrowRight01Icon}>Right Icon</Button>
-                
+
                 <Button variant="outline" size="md" className="ring-2 ring-neutral-500/10">Focused State</Button>
                 <Button variant="outline" size="md" disabled>Disabled State</Button>
                 <Button variant="outline" size="md" loading>Loading...</Button>
@@ -602,18 +602,18 @@ export default function Home() {
                   {/* Toggles */}
                   <div className="flex flex-wrap items-center gap-6">
                     <Toggle checked={toggleVal} onChange={setToggleVal} label="Interactive Switch" />
-                    <Toggle checked={true} onChange={() => {}} label="Disabled On Switch" disabled />
+                    <Toggle checked={true} onChange={() => { }} label="Disabled On Switch" disabled />
                   </div>
                   {/* Checkboxes */}
                   <div className="flex flex-wrap items-center gap-6">
                     <Checkbox checked={checkboxVal} onChange={setCheckboxVal} label="I agree to terms" />
-                    <Checkbox checked={true} onChange={() => {}} label="Disabled Checkbox" disabled />
+                    <Checkbox checked={true} onChange={() => { }} label="Disabled Checkbox" disabled />
                   </div>
                   {/* Radio Buttons */}
                   <div className="flex flex-wrap items-center gap-6">
                     <Radio checked={radioVal === "option1"} onChange={() => setRadioVal("option1")} label="Daily Checkup" name="diagnostics" />
                     <Radio checked={radioVal === "option2"} onChange={() => setRadioVal("option2")} label="Weekly Report" name="diagnostics" />
-                    <Radio checked={false} onChange={() => {}} label="Disabled Radio" name="disabled-radio" disabled />
+                    <Radio checked={false} onChange={() => { }} label="Disabled Radio" name="disabled-radio" disabled />
                   </div>
                 </div>
               </div>
@@ -657,91 +657,91 @@ export default function Home() {
 
         {/* New Premium Components Section */}
         <section className="mt-8 border border-neutral-200/80 rounded-[24px] p-8 bg-white shadow-sm space-y-8">
-            <div>
-              <h3 className="font-extrabold text-lg text-neutral-900 tracking-tight">Newly Added UI Components</h3>
-              <p className="text-xs text-neutral-450 mt-1 font-medium">Explore our latest selection of premium design tokens & components.</p>
-            </div>
+          <div>
+            <h3 className="font-extrabold text-lg text-neutral-900 tracking-tight">Newly Added UI Components</h3>
+            <p className="text-xs text-neutral-450 mt-1 font-medium">Explore our latest selection of premium design tokens & components.</p>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {/* Column 1: Avatars & Tooltips */}
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Avatar Profile Badges</h4>
-                  <div className="flex items-center gap-3">
-                    <Avatar fallback="JD" size="sm" status="online" />
-                    <Avatar fallback="AP" size="md" status="away" />
-                    <Avatar fallback="MS" size="lg" status="offline" />
-                    <Avatar fallback="ZC" size="xl" status="online" src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=150" />
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Tooltips</h4>
-                  <div className="flex flex-wrap gap-4 pt-1">
-                    <Tooltip content="Main Brand Medical Theme Color" position="top">
-                      <span className="cursor-help px-3 py-1.5 bg-primary-50 text-primary-700 border border-primary-200/60 rounded-md text-xs font-semibold">Hover Top</span>
-                    </Tooltip>
-                    <Tooltip content="Completed Diagnostics Flag" position="bottom">
-                      <span className="cursor-help px-3 py-1.5 bg-success-50 text-success-700 border border-success-200/60 rounded-md text-xs font-semibold">Hover Bottom</span>
-                    </Tooltip>
-                    <Tooltip content="Secure SSL Protocol Active" position="right">
-                      <span className="cursor-help px-3 py-1.5 bg-neutral-50 text-neutral-700 border border-neutral-250/60 rounded-md text-xs font-semibold">Hover Right</span>
-                    </Tooltip>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Column 1: Avatars & Tooltips */}
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Avatar Profile Badges</h4>
+                <div className="flex items-center gap-3">
+                  <Avatar fallback="JD" size="sm" status="online" />
+                  <Avatar fallback="AP" size="md" status="away" />
+                  <Avatar fallback="MS" size="lg" status="offline" />
+                  <Avatar fallback="ZC" size="xl" status="online" src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=150" />
                 </div>
               </div>
 
-              {/* Column 2: Tabs & Progress */}
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Tabs</h4>
-                  <Tabs
-                    activeTab={activeTab}
-                    onChange={setActiveTab}
-                    tabs={[
-                      { id: "tab-profile", label: "Patient Profile" },
-                      { id: "tab-vitals", label: "Vitals Data" },
-                      { id: "tab-reports", label: "Reports" }
-                    ]}
-                  />
-                  <div className="mt-3 text-xs text-neutral-500 bg-neutral-50 p-3 rounded-lg border border-neutral-200/40">
-                    Active Content: <span className="font-bold text-neutral-800">{activeTab === "tab-profile" ? "👤 Patient Profile Details" : activeTab === "tab-vitals" ? "📊 Realtime Vital Charts" : "📄 Diagnostic PDFs"}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Progress Bar</h4>
-                  <Progress value={68} showValue />
-                </div>
-              </div>
-
-              {/* Column 3: Accordion & Stepper */}
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Accordion FAQ</h4>
-                  <Accordion
-                    items={[
-                      { id: "faq-1", title: "How to view reports?", content: "You can download diagnostic PDF files inside the vital history page." },
-                      { id: "faq-2", title: "How to change password?", content: "Navigate to the Security options within your general account profile page." }
-                    ]}
-                  />
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Stepper</h4>
-                  <Stepper
-                    activeStep={1}
-                    steps={[
-                      { label: "Booked", description: "Slot selected" },
-                      { label: "Check-in", description: "Vitals verified" },
-                      { label: "Consultation" }
-                    ]}
-                  />
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Tooltips</h4>
+                <div className="flex flex-wrap gap-4 pt-1">
+                  <Tooltip content="Main Brand Medical Theme Color" position="top">
+                    <span className="cursor-help px-3 py-1.5 bg-primary-50 text-primary-700 border border-primary-200/60 rounded-md text-xs font-semibold">Hover Top</span>
+                  </Tooltip>
+                  <Tooltip content="Completed Diagnostics Flag" position="bottom">
+                    <span className="cursor-help px-3 py-1.5 bg-success-50 text-success-700 border border-success-200/60 rounded-md text-xs font-semibold">Hover Bottom</span>
+                  </Tooltip>
+                  <Tooltip content="Secure SSL Protocol Active" position="right">
+                    <span className="cursor-help px-3 py-1.5 bg-neutral-50 text-neutral-700 border border-neutral-250/60 rounded-md text-xs font-semibold">Hover Right</span>
+                  </Tooltip>
                 </div>
               </div>
             </div>
-          </section>
-        </main>
+
+            {/* Column 2: Tabs & Progress */}
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Tabs</h4>
+                <Tabs
+                  activeTab={activeTab}
+                  onChange={setActiveTab}
+                  tabs={[
+                    { id: "tab-profile", label: "Patient Profile" },
+                    { id: "tab-vitals", label: "Vitals Data" },
+                    { id: "tab-reports", label: "Reports" }
+                  ]}
+                />
+                <div className="mt-3 text-xs text-neutral-500 bg-neutral-50 p-3 rounded-lg border border-neutral-200/40">
+                  Active Content: <span className="font-bold text-neutral-800">{activeTab === "tab-profile" ? "👤 Patient Profile Details" : activeTab === "tab-vitals" ? "📊 Realtime Vital Charts" : "📄 Diagnostic PDFs"}</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Progress Bar</h4>
+                <Progress value={68} showValue />
+              </div>
+            </div>
+
+            {/* Column 3: Accordion & Stepper */}
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Accordion FAQ</h4>
+                <Accordion
+                  items={[
+                    { id: "faq-1", title: "How to view reports?", content: "You can download diagnostic PDF files inside the vital history page." },
+                    { id: "faq-2", title: "How to change password?", content: "Navigate to the Security options within your general account profile page." }
+                  ]}
+                />
+              </div>
+
+              <div>
+                <h4 className="font-bold text-sm text-neutral-600 border-b border-neutral-200/60 pb-2 mb-3">Interactive Stepper</h4>
+                <Stepper
+                  activeStep={1}
+                  steps={[
+                    { label: "Booked", description: "Slot selected" },
+                    { label: "Check-in", description: "Vitals verified" },
+                    { label: "Consultation" }
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-neutral-200/60 bg-white py-8 px-6 lg:px-12 flex flex-col sm:flex-row items-center justify-between text-neutral-400 text-xs">
@@ -783,8 +783,8 @@ export default function Home() {
             if (reverseIndex >= 3) return null; // Show max 3 stacked
 
             // Older toasts are offset upwards slightly and scaled down
-            const translateY = -reverseIndex * 14; 
-            const scale = 1 - reverseIndex * 0.04; 
+            const translateY = -reverseIndex * 14;
+            const scale = 1 - reverseIndex * 0.04;
             const opacity = 1 - reverseIndex * 0.15;
             const zIndex = 50 - reverseIndex;
 
@@ -806,11 +806,11 @@ export default function Home() {
               warning: "Warning",
               error: "Alert"
             };
-            const iconObj = toast.type === "success" 
-              ? CheckmarkCircle01Icon 
+            const iconObj = toast.type === "success"
+              ? CheckmarkCircle01Icon
               : toast.type === "info"
-              ? InformationCircleIcon
-              : AlertCircleIcon;
+                ? InformationCircleIcon
+                : AlertCircleIcon;
 
             return (
               <div
