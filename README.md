@@ -20,39 +20,6 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Database (Supabase)
-
-zocare uses [Supabase](https://supabase.com) (hosted Postgres) as its database. The client
-setup lives in [`lib/supabase/`](lib/supabase/) and the SQL schema in
-[`supabase/schema.sql`](supabase/schema.sql).
-
-One-time setup:
-
-1. Create a free project at [supabase.com](https://supabase.com) (pick a region near you).
-2. In the project's **Connect** modal (or **Settings → API Keys**), copy the **Project URL**
-   and the **Publishable key** (`sb_publishable_…`; the legacy "anon" key also works for now).
-3. Copy `.env.example` to `.env.local` and paste both values in.
-4. Open **SQL Editor → New query**, paste the contents of
-   [`supabase/schema.sql`](supabase/schema.sql), and **Run**. Confirm the `doctors` and
-   `receptionists` tables appear under **Table Editor**.
-5. Restart `npm run dev` so Next.js picks up the new environment variables.
-
-Using it in code:
-
-```ts
-// Server Components, Server Actions, Route Handlers:
-import { createClient } from "@/lib/supabase/server";
-const supabase = await createClient();
-
-// Client Components ("use client"):
-import { createClient } from "@/lib/supabase/client";
-const supabase = createClient();
-```
-
-> ⚠️ The schema ships with **dev-only, permissive** Row Level Security policies so you can
-> build before auth exists. Tighten them before production — see the comments at the bottom of
-> `supabase/schema.sql`.
-
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
