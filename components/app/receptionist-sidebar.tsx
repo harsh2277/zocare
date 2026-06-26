@@ -50,7 +50,7 @@ export const ReceptionistSidebar = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-neutral-100">
+      <div className="flex items-center justify-between h-14 px-4 border-b border-neutral-100">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
             <HugeiconsIcon icon={PlusSignIcon} className="w-4 h-4 text-white" />

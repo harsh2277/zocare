@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Search01Icon, GridViewIcon, ListSettingIcon, EyeIcon, Delete01Icon, StethoscopeIcon, PlusSignIcon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Search01Icon, GridViewIcon, ListSettingIcon, EyeIcon, Delete01Icon, StethoscopeIcon, PlusSignIcon, Cancel01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,44 @@ export default function ReceptionistPatientsPage() {
   const [selectedDetailPatient, setSelectedDetailPatient] = useState<Patient | null>(null);
   const [detailTab, setDetailTab] = useState<"info" | "history">("info");
   const [deletingPatient, setDeletingPatient] = useState<Patient | null>(null);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: "", phone: "", email: "", gender: "", blood_group: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEdit = (p: Patient) => {
+    setSelectedDetailPatient(null);
+    setEditForm({
+      full_name: p.full_name,
+      phone: p.phone ?? "",
+      email: p.email ?? "",
+      gender: p.gender ?? "",
+      blood_group: p.blood_group ?? "",
+    });
+    setEditingPatient(p);
+  };
+
+  const saveEdit = async () => {
+    if (!editingPatient) return;
+    setSavingEdit(true);
+    const supabase = createClient();
+    const { error } = await (supabase
+      .from("patients") as any)
+      .update({
+        full_name: editForm.full_name.trim(),
+        phone: editForm.phone || null,
+        email: editForm.email || null,
+        gender: editForm.gender || null,
+        blood_group: editForm.blood_group || null,
+      } as any)
+      .eq("id", editingPatient.id);
+    setSavingEdit(false);
+    if (error) {
+      alert("Error updating patient: " + error.message);
+      return;
+    }
+    setEditingPatient(null);
+    loadPatients();
+  };
 
   const loadPatients = async () => {
     setLoading(true);
@@ -255,7 +293,7 @@ export default function ReceptionistPatientsPage() {
               {filtered.map((p) => {
                 const age = ageYears(p.date_of_birth);
                 return (
-                  <tr key={p.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors">
+                  <tr key={p.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer" onClick={() => { setDetailTab("info"); setSelectedDetailPatient(p); }}>
                     <td className="px-4 py-3 text-xs font-mono text-neutral-500">{p.patient_id}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
@@ -277,9 +315,10 @@ export default function ReceptionistPatientsPage() {
                     <td className="px-4 py-3">
                       <Badge variant={p.is_active ? "success" : "neutral"}>{p.is_active ? "Active" : "Inactive"}</Badge>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" leftIcon={EyeIcon} className="text-neutral-400 hover:text-primary-600" onClick={() => { setDetailTab("info"); setSelectedDetailPatient(p); }} />
+                        <Button variant="ghost" size="sm" leftIcon={PencilEdit01Icon} className="text-neutral-400 hover:text-primary-600" onClick={() => openEdit(p)} />
                         <Button variant="ghost" size="sm" leftIcon={Delete01Icon} className="text-neutral-400 hover:text-error-600" onClick={() => setDeletingPatient(p)} />
                       </div>
                     </td>
@@ -304,7 +343,7 @@ export default function ReceptionistPatientsPage() {
       {/* Patient Detail Modal Pop-up */}
       {selectedDetailPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white rounded-2xl border border-neutral-200 overflow-hidden flex flex-col shadow-xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-2xl bg-white rounded-2xl border border-neutral-200 overflow-hidden flex flex-col shadow-xl animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
               <h2 className="text-lg font-bold text-neutral-800">Patient Profile details</h2>
@@ -329,24 +368,22 @@ export default function ReceptionistPatientsPage() {
               <div className="flex border-b border-neutral-100">
                 <button
                   onClick={() => setDetailTab("info")}
-                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all ${
-                    detailTab === "info" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
-                  }`}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 ${detailTab === "info" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
+                    }`}
                 >
                   Info
                 </button>
                 <button
                   onClick={() => setDetailTab("history")}
-                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all ${
-                    detailTab === "history" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
-                  }`}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 ${detailTab === "history" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
+                    }`}
                 >
                   History ({selectedDetailPatient.appointments?.length ?? 0})
                 </button>
               </div>
 
               {detailTab === "info" && (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-4 border-t border-neutral-100">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-4">
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Mobile Number</p>
                     <p className="text-sm font-semibold text-neutral-855">{selectedDetailPatient.phone ?? "—"}</p>
@@ -377,10 +414,10 @@ export default function ReceptionistPatientsPage() {
               )}
 
               {detailTab === "history" && (
-                <div className="space-y-3 pt-4 border-t border-neutral-100 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                   {selectedDetailPatient.appointments && selectedDetailPatient.appointments.length > 0 ? (
                     selectedDetailPatient.appointments.map((app, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-150 text-xs">
+                      <div key={idx} className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs">
                         <div>
                           <p className="font-semibold text-neutral-800">{fmtDate(app.appointment_date)}</p>
                           <p className="text-neutral-500 mt-0.5">Doctor: {app.doctorName}</p>
@@ -401,7 +438,7 @@ export default function ReceptionistPatientsPage() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between">
+            <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between rounded-b-2xl">
               <Button
                 variant="ghost"
                 leftIcon={Delete01Icon}
@@ -413,9 +450,14 @@ export default function ReceptionistPatientsPage() {
               >
                 Delete Patient
               </Button>
-              <Button variant="primary" onClick={() => setSelectedDetailPatient(null)}>
-                Close
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" leftIcon={PencilEdit01Icon} onClick={() => openEdit(selectedDetailPatient)}>
+                  Edit
+                </Button>
+                <Button variant="primary" onClick={() => setSelectedDetailPatient(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -454,6 +496,59 @@ export default function ReceptionistPatientsPage() {
               >
                 Delete
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Patient Modal */}
+      {editingPatient && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white rounded-2xl border border-neutral-200 overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+              <h2 className="text-lg font-bold text-neutral-800">Edit Patient</h2>
+              <button onClick={() => setEditingPatient(null)} className="text-neutral-400 hover:text-neutral-600 transition-colors">
+                <HugeiconsIcon icon={Cancel01Icon} className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <Input
+                label="Full Name"
+                value={editForm.full_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, full_name: (e.target as HTMLInputElement).value }))}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Mobile Number"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, phone: (e.target as HTMLInputElement).value }))}
+                />
+                <Input
+                  label="Email Address"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((f) => ({ ...f, email: (e.target as HTMLInputElement).value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Gender"
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm((f) => ({ ...f, gender: e.target.value }))}
+                  options={[{ value: "", label: "Select Gender" }, { value: "male", label: "Male" }, { value: "female", label: "Female" }, { value: "other", label: "Other" }]}
+                />
+                <Select
+                  label="Blood Type"
+                  value={editForm.blood_group}
+                  onChange={(e) => setEditForm((f) => ({ ...f, blood_group: e.target.value }))}
+                  options={[{ value: "", label: "Select Group" }, ...["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"].map((b) => ({ value: b, label: b }))]}
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-end gap-3">
+              <Button variant="outline" onClick={() => setEditingPatient(null)}>Cancel</Button>
+              <Button variant="primary" loading={savingEdit} onClick={saveEdit}>Save Changes</Button>
             </div>
           </div>
         </div>

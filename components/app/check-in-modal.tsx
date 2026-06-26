@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Cancel01Icon, CallIcon, StethoscopeIcon, CheckmarkCircle01Icon, PrinterIcon, PlusSignIcon, ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { Cancel01Icon, CallIcon, StethoscopeIcon, PlusSignIcon, ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { TokenGeneratedModal } from "@/components/app/token-generated-modal";
 
 interface Props {
   isOpen: boolean;
@@ -49,7 +49,7 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorOption | null>(null);
   const [visitType, setVisitType] = useState("consultation");
   const [note, setNote] = useState("");
-  const [payMethod, setPayMethod] = useState<"cash" | "card" | "insurance">("cash");
+  const [payMethod, setPayMethod] = useState<"cash" | "card">("cash");
   const [tokenNumber, setTokenNumber] = useState<number | null>(null);
 
   useEffect(() => {
@@ -151,6 +151,20 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
 
   if (!isOpen) return null;
 
+  if (step === 4 && selectedPatient && selectedDoctor) {
+    return (
+      <TokenGeneratedModal
+        patientName={selectedPatient.name}
+        doctorName={selectedDoctor.name}
+        token={tokenNumber}
+        onClose={handleClose}
+        onDone={() => { handleClose(); router.push("/receptionist/queue"); }}
+        onSecondary={() => { handleClose(); router.push("/receptionist/patients"); }}
+        secondaryLabel="Back to Patients"
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm" onClick={handleClose} />
@@ -179,44 +193,54 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
                 </div>
               </div>
 
-              {searching && (
-                <p className="text-xs text-neutral-400 text-center py-2">Searching patient...</p>
-              )}
+              <div className="h-[320px] overflow-y-auto">
+                {searching && (
+                  <p className="text-xs text-neutral-400 text-center py-2">Searching patient...</p>
+                )}
 
-              {results.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">MATCHING RESULTS ({results.length})</p>
-                  {results.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedPatient(p)}
-                      className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${selectedPatient?.id === p.id ? "border-primary-400 bg-primary-50/50" : "border-neutral-200 hover:border-neutral-300"
-                        }`}
+                {!searching && results.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">MATCHING RESULTS ({results.length})</p>
+                    {results.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedPatient(p)}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${selectedPatient?.id === p.id ? "border-primary-400 bg-primary-50/50" : "border-neutral-200 hover:border-neutral-300"
+                          }`}
+                      >
+                        <div className="w-9 h-9 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">{getInitials(p.name)}</div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-800">{p.name}</p>
+                          <p className="text-xs text-neutral-500">{p.phone} · {p.patient_id}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!searching && results.length === 0 && mobileSearch && (
+                  <div className="flex flex-col items-center justify-center h-full space-y-3 text-center">
+                    <p className="text-sm text-neutral-450">No patients found for that number.</p>
+                    <Button
+                      variant="primary"
+                      leftIcon={PlusSignIcon}
+                      onClick={() => {
+                        handleClose();
+                        router.push(`/receptionist/patients/new?phone=${encodeURIComponent(mobileSearch)}`);
+                      }}
                     >
-                      <div className="w-9 h-9 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">{getInitials(p.name)}</div>
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-800">{p.name}</p>
-                        <p className="text-xs text-neutral-500">{p.phone} · {p.patient_id}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {results.length === 0 && mobileSearch && !searching && (
-                <div className="text-center py-6 space-y-3">
-                  <p className="text-sm text-neutral-450">No patients found for that number.</p>
-                  <Button
-                    variant="primary"
-                    leftIcon={PlusSignIcon}
-                    onClick={() => {
-                      handleClose();
-                      router.push(`/receptionist/patients/new?phone=${encodeURIComponent(mobileSearch)}`);
-                    }}
-                  >
-                    Add Patient
-                  </Button>
-                </div>
-              )}
+                      Add Patient
+                    </Button>
+                  </div>
+                )}
+
+                {!searching && !mobileSearch && (
+                  <div className="flex flex-col items-center justify-center h-full text-neutral-400 space-y-2">
+                    <HugeiconsIcon icon={CallIcon} className="w-8 h-8 text-neutral-300" />
+                    <p className="text-sm font-medium text-neutral-500">Enter a mobile number to find a patient</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -237,22 +261,26 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
               <div>
                 <p className="text-xs font-bold text-neutral-600 uppercase tracking-wide mb-2">Assign Doctor</p>
                 <div className="border-y border-neutral-100 py-3">
-                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
                     {doctors.map((doc) => (
                       <button
                         key={doc.id}
                         onClick={() => setSelectedDoctor(doc)}
-                        className={`p-3.5 rounded-xl border text-left transition-all ${selectedDoctor?.id === doc.id ? "border-primary-400 bg-primary-50/40" : "border-neutral-200 hover:border-neutral-300"
+                        className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${selectedDoctor?.id === doc.id
+                          ? "border-[#0d6e6b] bg-[#f4f8f7] ring-1 ring-[#0d6e6b]/30"
+                          : "border-neutral-200 hover:border-neutral-300 bg-white"
                           }`}
                       >
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">{getInitials(doc.name.replace("Dr. ", ""))}</div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-neutral-800 truncate">{doc.name}</p>
-                            <p className="text-[10px] text-neutral-400">{doc.specialization ?? "—"}</p>
+                        <div className="flex items-start justify-between w-full gap-2 mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-[#0d6e6b] flex items-center justify-center text-white text-xs font-bold shrink-0">{getInitials(doc.name.replace("Dr. ", ""))}</div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-neutral-850 leading-snug truncate">{doc.name}</p>
+                              <p className="text-xs text-neutral-450 mt-0.5">{doc.specialization ?? "—"}</p>
+                            </div>
                           </div>
+                          <span className="text-[10px] font-bold px-2 py-1 rounded bg-[#e6f0fa] text-[#1e88e5] whitespace-nowrap shrink-0">Available</span>
                         </div>
-                        <Badge variant="success">Available</Badge>
                       </button>
                     ))}
                   </div>
@@ -310,8 +338,8 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
 
               <div>
                 <p className="text-xs font-bold text-neutral-600 uppercase tracking-wide mb-2">Payment Method</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["cash", "card", "insurance"] as const).map((m) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(["cash", "card"] as const).map((m) => (
                     <Button
                       key={m}
                       variant={payMethod === m ? "primary" : "outline"}
@@ -326,32 +354,6 @@ export const CheckInModal = ({ isOpen, onClose, initialPatient }: Props) => {
             </div>
           )}
 
-          {/* Step 4 */}
-          {step === 4 && selectedPatient && selectedDoctor && (
-            <div className="text-center py-2">
-              <div className="w-14 h-14 rounded-full bg-success-50 border-2 border-success-200 flex items-center justify-center mx-auto mb-4">
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="w-7 h-7 text-success-600" />
-              </div>
-              <h3 className="text-xl font-bold text-neutral-900 mb-1">Check In Successful!</h3>
-              <p className="text-sm text-neutral-500 mb-6">{selectedPatient.name} assigned to {selectedDoctor.name}</p>
-
-              <div className="border-2 border-dashed border-primary-200 bg-primary-50/30 rounded-xl px-8 py-6 mb-4 mx-auto max-w-xs">
-                <p className="text-[10px] font-bold text-primary-500 uppercase tracking-wider mb-2">TOKEN NUMBER</p>
-                <p className="text-5xl font-black text-primary-700">#{tokenNumber ?? "—"}</p>
-              </div>
-
-              <p className="text-sm text-neutral-500 mb-6">Est. Wait: <span className="font-semibold text-neutral-700">15 min</span></p>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <Button variant="outline" leftIcon={PrinterIcon}>Print Token</Button>
-                <Button variant="primary" leftIcon={CheckmarkCircle01Icon} onClick={() => { handleClose(); router.push("/receptionist/queue"); }}>Done</Button>
-              </div>
-
-              <Button variant="link" onClick={() => { handleClose(); router.push("/receptionist/patients"); }}>
-                Back to Patients
-              </Button>
-            </div>
-          )}
         </div>
 
         {step < 4 && (

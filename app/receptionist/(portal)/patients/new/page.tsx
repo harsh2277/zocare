@@ -1,18 +1,26 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PlusSignIcon, Cancel01Icon, CheckmarkCircle01Icon, StethoscopeIcon } from "@hugeicons/core-free-icons";
+import { PlusSignIcon, Cancel01Icon, CheckmarkCircle01Icon, StethoscopeIcon, Calendar01Icon } from "@hugeicons/core-free-icons";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import { TokenGeneratedModal } from "@/components/app/token-generated-modal";
 
 type Doctor = { id: string; full_name: string; specialization: string | null };
 
+// Convert a DD-MM-YYYY string to an ISO YYYY-MM-DD date (or null if incomplete/invalid).
+function dobToISO(dob: string): string | null {
+  const m = dob.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const bloodTypes = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
-const allergyOptions = ["Penicillin", "Sulfa", "Latex", "Aspirin", "Ibuprofen", "Codeine", "Peanuts", "Shellfish"];
 
 function getInitials(name: string) {
   return name.replace("Dr. ", "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -29,23 +37,94 @@ function getDepartment(specialization: string | null): string {
   return specialization;
 }
 
-export default function AddNewPatientPage() {
+function AddNewPatientPageContent() {
   const router = useRouter();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const searchParams = useSearchParams();
   const phoneParam = searchParams.get("phone");
 
   const [visitType, setVisitType] = useState("consultation");
+  const [note, setNote] = useState("");
   const [patientCounts, setPatientCounts] = useState<Record<string, number>>({});
   const [form, setForm] = useState({
     firstName: "", lastName: "", mobile: "", email: "",
     dob: "", gender: "", bloodType: "", address: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<{ firstName?: string; mobile?: string; dob?: string; doctor?: string }>({});
   const [allergyInput, setAllergyInput] = useState("");
   const [allergies, setAllergies] = useState<string[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Custom calendar picker states
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const calendarRef = React.useRef<HTMLDivElement>(null);
+
+  const openCalendar = () => {
+    if (form.dob) {
+      const parts = form.dob.split("-");
+      if (parts.length === 3) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        if (!isNaN(d) && !isNaN(m) && !isNaN(y) && y > 1900 && y < 2100 && m >= 0 && m < 12) {
+          setCalendarMonth(m);
+          setCalendarYear(y);
+        }
+      }
+    }
+    setShowCalendar(true);
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const daysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+  const startDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
+
+  const handlePrevMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  const handleSelectDay = (day: number) => {
+    const dStr = String(day).padStart(2, "0");
+    const mStr = String(calendarMonth + 1).padStart(2, "0");
+    const dateVal = `${dStr}-${mStr}-${calendarYear}`;
+    setForm((f) => ({ ...f, dob: dateVal }));
+    setFieldErrors((p) => ({ ...p, dob: undefined }));
+    setShowCalendar(false);
+  };
+
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const currentYearSelected = new Date().getFullYear();
+  const years = Array.from({ length: currentYearSelected - 1900 + 1 }, (_, i) => currentYearSelected - i);
 
   useEffect(() => {
     if (phoneParam) {
@@ -95,9 +174,13 @@ export default function AddNewPatientPage() {
 
   const handleNextToBilling = () => {
     setError(null);
-    if (!form.firstName.trim()) { setError("First name is required."); return; }
-    if (!form.mobile.trim()) { setError("Mobile number is required."); return; }
-    if (!selectedDoctorId) { setError("Please select a doctor to assign."); return; }
+    const errs: typeof fieldErrors = {};
+    if (!form.firstName.trim()) errs.firstName = "First name is required.";
+    if (!form.mobile.trim()) errs.mobile = "Mobile number is required.";
+    if (form.dob.trim() && !dobToISO(form.dob)) errs.dob = "Use DD-MM-YYYY format.";
+    if (!selectedDoctorId) errs.doctor = "Please select a doctor to assign.";
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
     setActiveStep("billing");
   };
 
@@ -111,7 +194,7 @@ export default function AddNewPatientPage() {
         full_name: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
         phone: form.mobile || null,
         email: form.email || null,
-        date_of_birth: form.dob || null,
+        date_of_birth: dobToISO(form.dob),
         gender: form.gender || null,
         blood_group: form.bloodType || null,
         address: form.address || null,
@@ -135,6 +218,7 @@ export default function AddNewPatientPage() {
         appointment_time: new Date().toTimeString().split(" ")[0],
         type: visitType,
         status: "checked_in",
+        notes: note || null,
       } as any;
       const { data: appointmentData, error: appointmentErr } = await supabase
         .from("appointments")
@@ -154,7 +238,7 @@ export default function AddNewPatientPage() {
         .limit(1) as unknown as { data: { token_number: number }[] | null; error: any };
 
       if (lastEntriesErr) throw lastEntriesErr;
-      
+
       const nextToken = lastEntries && lastEntries.length > 0 ? lastEntries[0].token_number + 1 : 1;
 
       // 3. Insert queue entry
@@ -222,15 +306,102 @@ export default function AddNewPatientPage() {
           </div>
           <div className="p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Input label="First Name *" placeholder="e.g. Ahmed" value={form.firstName} onChange={(e) => set("firstName", (e.target as HTMLInputElement).value)} />
+              <Input label="First Name *" placeholder="e.g. Ahmed" value={form.firstName} error={fieldErrors.firstName} onChange={(e) => { set("firstName", (e.target as HTMLInputElement).value); setFieldErrors((p) => ({ ...p, firstName: undefined })); }} />
               <Input label="Last Name" placeholder="e.g. Khan" value={form.lastName} onChange={(e) => set("lastName", (e.target as HTMLInputElement).value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Mobile Number *" placeholder="+92 300 0000000" value={form.mobile} onChange={(e) => set("mobile", (e.target as HTMLInputElement).value)} />
+              <Input label="Mobile Number *" placeholder="+92 300 0000000" value={form.mobile} error={fieldErrors.mobile} onChange={(e) => { set("mobile", (e.target as HTMLInputElement).value); setFieldErrors((p) => ({ ...p, mobile: undefined })); }} />
               <Input label="Email Address" placeholder="ahmed.khan@example.com" value={form.email} onChange={(e) => set("email", (e.target as HTMLInputElement).value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Date of Birth" placeholder="YYYY-MM-DD" value={form.dob} onChange={(e) => set("dob", (e.target as HTMLInputElement).value)} />
+              <div className="relative" ref={calendarRef}>
+                <Input
+                  label="Date of Birth"
+                  placeholder="DD-MM-YYYY"
+                  value={form.dob}
+                  error={fieldErrors.dob}
+                  rightIcon={Calendar01Icon}
+                  onFocus={openCalendar}
+                  onClick={openCalendar}
+                  onChange={(e) => {
+                    set("dob", (e.target as HTMLInputElement).value);
+                    setFieldErrors((p) => ({ ...p, dob: undefined }));
+                  }}
+                />
+                {showCalendar && (
+                  <div className="absolute left-0 top-[100%] mt-2 z-50 bg-white border border-neutral-200 rounded-xl shadow-xl p-4 w-72 select-none">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-1 mb-3">
+                      <button
+                        type="button"
+                        onClick={handlePrevMonth}
+                        className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors"
+                      >
+                        &larr;
+                      </button>
+                      <div className="flex gap-1.5 flex-1 justify-center">
+                        <select
+                          value={calendarMonth}
+                          onChange={(e) => setCalendarMonth(parseInt(e.target.value))}
+                          className="bg-transparent border-0 font-semibold text-sm text-neutral-800 focus:ring-0 focus:outline-none cursor-pointer p-0"
+                        >
+                          {months.map((m, idx) => (
+                            <option key={m} value={idx}>{m.slice(0, 3)}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={calendarYear}
+                          onChange={(e) => setCalendarYear(parseInt(e.target.value))}
+                          className="bg-transparent border-0 font-semibold text-sm text-neutral-800 focus:ring-0 focus:outline-none cursor-pointer p-0"
+                        >
+                          {years.map((y) => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleNextMonth}
+                        className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors"
+                      >
+                        &rarr;
+                      </button>
+                    </div>
+
+                    {/* Week Days */}
+                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-neutral-400 mb-2">
+                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+                        <div key={d} className="py-1">{d}</div>
+                      ))}
+                    </div>
+
+                    {/* Days Grid */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: startDayOfMonth(calendarMonth, calendarYear) }).map((_, idx) => (
+                        <div key={`empty-${idx}`} />
+                      ))}
+                      {Array.from({ length: daysInMonth(calendarMonth, calendarYear) }).map((_, idx) => {
+                        const day = idx + 1;
+                        const isSelected = form.dob === `${String(day).padStart(2, "0")}-${String(calendarMonth + 1).padStart(2, "0")}-${calendarYear}`;
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => handleSelectDay(day)}
+                            className={`py-1 text-xs font-semibold rounded-lg transition-all ${
+                              isSelected
+                                ? "bg-primary-600 text-white"
+                                : "hover:bg-primary-50 text-neutral-700"
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
               <Select
                 label="Gender"
                 value={form.gender}
@@ -269,11 +440,7 @@ export default function AddNewPatientPage() {
                     value={allergyInput}
                     onChange={(e) => setAllergyInput((e.target as HTMLInputElement).value)}
                     onKeyDown={(e) => e.key === "Enter" && addAllergy()}
-                    list="allergy-options"
                   />
-                  <datalist id="allergy-options">
-                    {allergyOptions.map((a) => <option key={a} value={a} />)}
-                  </datalist>
                 </div>
                 <Button variant="primary" leftIcon={PlusSignIcon} onClick={addAllergy} className="shrink-0">Add</Button>
               </div>
@@ -290,6 +457,16 @@ export default function AddNewPatientPage() {
                 </div>
               )}
             </div>
+
+            {/* Note */}
+            <Input
+              label="Note"
+              multiline
+              rows={3}
+              placeholder="Add a note about the patient or visit (symptoms, reason, etc.)"
+              value={note}
+              onChange={(e) => setNote((e.target as HTMLTextAreaElement).value)}
+            />
           </div>
         </Card>
 
@@ -306,7 +483,7 @@ export default function AddNewPatientPage() {
                 {doctors.map((doc) => (
                   <button
                     key={doc.id}
-                    onClick={() => setSelectedDoctorId(doc.id === selectedDoctorId ? null : doc.id)}
+                    onClick={() => { setSelectedDoctorId(doc.id === selectedDoctorId ? null : doc.id); setFieldErrors((p) => ({ ...p, doctor: undefined })); }}
                     className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${selectedDoctorId === doc.id
                       ? "border-[#0d6e6b] bg-[#f4f8f7] ring-1 ring-[#0d6e6b]/30"
                       : "border-neutral-200 hover:border-neutral-300 bg-white"
@@ -338,6 +515,9 @@ export default function AddNewPatientPage() {
                   </button>
                 ))}
               </div>
+            )}
+            {fieldErrors.doctor && (
+              <p className="text-xs font-bold text-error-600 mt-3">{fieldErrors.doctor}</p>
             )}
           </div>
         </Card>
@@ -403,16 +583,15 @@ export default function AddNewPatientPage() {
               <div>
                 <p className="text-xs font-bold text-neutral-600 mb-2.5">Payment Method</p>
                 <div className="grid grid-cols-3 gap-3">
-                  {(["cash", "card", "insurance"] as const).map((method) => (
+                  {(["cash", "card"] as const).map((method) => (
                     <button
                       key={method}
                       type="button"
                       onClick={() => setPaymentMethod(method)}
-                      className={`py-2.5 rounded-lg border text-center font-bold text-sm transition-all capitalize ${
-                        paymentMethod === method
+                      className={`py-2.5 rounded-lg border text-center font-bold text-sm transition-all capitalize ${paymentMethod === method
                           ? "border-[#0d6e6b] bg-[#0d6e6b] text-white"
                           : "border-neutral-250 hover:border-neutral-350 text-neutral-600 bg-white"
-                      }`}
+                        }`}
                     >
                       {method}
                     </button>
@@ -426,9 +605,9 @@ export default function AddNewPatientPage() {
               <Button variant="outline" onClick={() => setActiveStep("form")}>
                 &larr; Back
               </Button>
-              <Button 
-                variant="primary" 
-                className="bg-[#0d6e6b] hover:bg-[#0b5c59] text-white border-0" 
+              <Button
+                variant="primary"
+                className="bg-[#0d6e6b] hover:bg-[#0b5c59] text-white border-0"
                 onClick={handleFinalizePaymentAndCheckIn}
                 loading={saving}
               >
@@ -441,65 +620,24 @@ export default function AddNewPatientPage() {
 
       {/* Step 4: Token Generated Modal */}
       {activeStep === "token" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-white rounded-2xl border border-neutral-200 overflow-hidden flex flex-col shadow-xl animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-              <h2 className="text-lg font-bold text-neutral-800">Token Generated</h2>
-              <button onClick={() => router.push("/receptionist/patients")} className="text-neutral-400 hover:text-neutral-600 transition-colors">
-                <HugeiconsIcon icon={Cancel01Icon} className="w-5 h-5" />
-              </button>
-            </div>
-
-
-
-            {/* Content */}
-            <div className="p-6 flex flex-col items-center text-center space-y-4">
-              <div className="w-14 h-14 rounded-full bg-[#e6f4f2] text-[#0d6e6b] flex items-center justify-center">
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-neutral-900">Check In Successful!</h3>
-                <p className="text-sm text-neutral-500 mt-1">
-                  {form.firstName} {form.lastName} assigned to {doctors.find(d => d.id === selectedDoctorId)?.full_name || "Doctor"}
-                </p>
-              </div>
-
-              {/* Dashed token box */}
-              <div className="w-full max-w-xs border border-dashed border-[#0d6e6b] bg-[#f4fcfb] rounded-2xl py-6 px-4 my-2">
-                <span className="text-[10px] font-bold text-[#0d6e6b] uppercase tracking-widest block mb-1">TOKEN NUMBER</span>
-                <span className="text-5xl font-black text-[#0d6e5c]">#{String(generatedToken ?? "").padStart(2, "0")}</span>
-              </div>
-
-              <p className="text-xs font-semibold text-neutral-500">Est. Wait: 15 min</p>
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Button variant="outline" size="md" onClick={() => alert("Printing token...")}>
-                  Print Token
-                </Button>
-                <Button 
-                  variant="primary" 
-                  size="md" 
-                  className="bg-[#0d6e6b] hover:bg-[#0b5c59] text-white border-0" 
-                  onClick={() => router.push("/receptionist/patients")}
-                >
-                  Done
-                </Button>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => router.push("/receptionist/patients")} 
-                className="text-xs font-semibold text-[#0d6e6b] hover:underline self-center"
-              >
-                Back to Patients
-              </button>
-            </div>
-          </div>
-        </div>
+        <TokenGeneratedModal
+          patientName={`${form.firstName} ${form.lastName}`.trim()}
+          doctorName={doctors.find((d) => d.id === selectedDoctorId)?.full_name || "Doctor"}
+          token={generatedToken}
+          onClose={() => router.push("/receptionist/patients")}
+          onDone={() => router.push("/receptionist/patients")}
+          onSecondary={() => router.push("/receptionist/patients")}
+          secondaryLabel="Back to Patients"
+        />
       )}
     </div>
+  );
+}
+
+export default function AddNewPatientPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-neutral-400">Loading...</div>}>
+      <AddNewPatientPageContent />
+    </Suspense>
   );
 }
