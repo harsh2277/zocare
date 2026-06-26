@@ -1,25 +1,32 @@
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { StethoscopeIcon, UserIcon, Mail01Icon, CallIcon, LockPasswordIcon } from "@hugeicons/core-free-icons";
+import { Select } from "@/components/ui/select";
+
+const specializationOptions = [
+  { value: "", label: "Select..." },
+  { value: "Cardiology", label: "Cardiology" },
+  { value: "General Practice", label: "General Practice" },
+  { value: "Pediatrics", label: "Pediatrics" },
+  { value: "Orthopedics", label: "Orthopedics" },
+  { value: "Dermatology", label: "Dermatology" },
+  { value: "Neurology", label: "Neurology" }
+];
 
 export default function DoctorSignupPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     fullName: "",
-    email: "",
-    phone: "",
-    specialization: "",
     registrationNo: "",
+    specialization: "",
+    hospitalDept: "",
+    email: "",
     password: "",
-    confirmPassword: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const set = (field: string, value: string) => {
     setFormData((p) => ({ ...p, [field]: value }));
@@ -29,142 +36,170 @@ export default function DoctorSignupPage() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (!formData.fullName.trim()) e.fullName = "Full name is required";
+    if (!formData.registrationNo.trim()) e.registrationNo = "Medical License Number is required";
+    if (!formData.specialization.trim()) e.specialization = "Specialization is required";
+    if (!formData.hospitalDept.trim()) e.hospitalDept = "Hospital/Department is required";
     if (!formData.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(formData.email)) e.email = "Enter a valid email";
-    if (!formData.phone.trim()) e.phone = "Phone is required";
-    if (!formData.specialization.trim()) e.specialization = "Specialization is required";
-    if (!formData.registrationNo.trim()) e.registrationNo = "Registration number is required";
     if (!formData.password) e.password = "Password is required";
-    else if (formData.password.length < 8) e.password = "Minimum 8 characters";
-    if (formData.password !== formData.confirmPassword) e.confirmPassword = "Passwords do not match";
-    if (!agreedToTerms) e.terms = "You must agree to the terms";
+    else if (formData.password.length < 8) e.password = "Password must be at least 8 characters";
     return e;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
+
     setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    await new Promise((r) => setTimeout(r, 1500));
+    setLoading(false);
+    router.push("/doctor/dashboard");
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-lg bg-white rounded-2xl  p-8">
-        {/* Step indicator */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 rounded-full bg-primary-600 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">1</span>
+    <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center p-4 py-12">
+      <div className="w-full max-w-[540px] bg-white rounded-2xl p-8 border border-[#e5e9f0]">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-[#1e293b] tracking-tight">Create Doctor Account</h1>
+          <p className="text-sm text-[#64748b] mt-1.5">Register to join the OPD system</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+              Full Name
+            </label>
+            <Input
+              type="text"
+              placeholder="Dr. John Doe"
+              value={formData.fullName}
+              onChange={(e) => set("fullName", (e.target as HTMLInputElement).value)}
+              error={errors.fullName}
+              className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+                Medical License Number
+              </label>
+              <Input
+                type="text"
+                placeholder="REG-12345"
+                value={formData.registrationNo}
+                onChange={(e) => set("registrationNo", (e.target as HTMLInputElement).value)}
+                error={errors.registrationNo}
+                className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
+              />
             </div>
-            <span className="text-xs text-neutral-500 font-medium">Step 1 of 1 — Personal Info</span>
-          </div>
-          <div className="w-full bg-neutral-100 rounded-full h-1">
-            <div className="bg-primary-600 h-1 rounded-full w-full" />
-          </div>
-        </div>
 
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-7">
-          <div className="w-12 h-12 rounded-xl bg-primary-600 flex items-center justify-center mb-3">
-            <HugeiconsIcon icon={StethoscopeIcon} className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-neutral-900">Create Account</h1>
-          <p className="text-sm text-neutral-500 mt-1">Join Zocare as a doctor</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Full Name"
-            placeholder="Dr. Jane Smith"
-            value={formData.fullName}
-            onChange={(e) => set("fullName", (e.target as HTMLInputElement).value)}
-            leftIcon={UserIcon}
-            error={errors.fullName}
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              value={formData.email}
-              onChange={(e) => set("email", (e.target as HTMLInputElement).value)}
-              leftIcon={Mail01Icon}
-              error={errors.email}
-            />
-            <Input
-              label="Phone"
-              placeholder="+91 98765 43210"
-              value={formData.phone}
-              onChange={(e) => set("phone", (e.target as HTMLInputElement).value)}
-              leftIcon={CallIcon}
-              error={errors.phone}
-            />
+            <div>
+              <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+                Specialization
+              </label>
+              <Select
+                options={specializationOptions}
+                value={formData.specialization}
+                onChange={(e) => set("specialization", (e.target as HTMLSelectElement).value)}
+                error={errors.specialization}
+                className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
+              />
+            </div>
           </div>
 
-          <Input
-            label="Specialization"
-            placeholder="e.g. Cardiology, General Practice"
-            value={formData.specialization}
-            onChange={(e) => set("specialization", (e.target as HTMLInputElement).value)}
-            leftIcon={StethoscopeIcon}
-            error={errors.specialization}
-          />
-
-          <Input
-            label="Medical Registration No."
-            placeholder="e.g. MED-123456"
-            value={formData.registrationNo}
-            onChange={(e) => set("registrationNo", (e.target as HTMLInputElement).value)}
-            error={errors.registrationNo}
-          />
-
-          <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+              Hospital/Department
+            </label>
             <Input
-              label="Password"
-              type="password"
-              placeholder="Min. 8 characters"
-              value={formData.password}
-              onChange={(e) => set("password", (e.target as HTMLInputElement).value)}
-              leftIcon={LockPasswordIcon}
-              error={errors.password}
-            />
-            <Input
-              label="Confirm Password"
-              type="password"
-              placeholder="Re-enter password"
-              value={formData.confirmPassword}
-              onChange={(e) => set("confirmPassword", (e.target as HTMLInputElement).value)}
-              leftIcon={LockPasswordIcon}
-              error={errors.confirmPassword}
+              type="text"
+              placeholder="e.g. Cardiology"
+              value={formData.hospitalDept}
+              onChange={(e) => set("hospitalDept", (e.target as HTMLInputElement).value)}
+              error={errors.hospitalDept}
+              className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
             />
           </div>
 
           <div>
-            <Checkbox
-              checked={agreedToTerms}
-              onChange={setAgreedToTerms}
-              label=""
+            <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+              Email
+            </label>
+            <Input
+              type="email"
+              placeholder="doctor@hospital.com"
+              value={formData.email}
+              onChange={(e) => set("email", (e.target as HTMLInputElement).value)}
+              error={errors.email}
+              className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
             />
-            <span className="text-sm text-neutral-700 ml-2">
-              I agree to the{" "}
-              <Link href="/terms" className="text-primary-600 hover:underline font-medium">Terms of Service</Link>
-              {" "}and{" "}
-              <Link href="/privacy" className="text-primary-600 hover:underline font-medium">Privacy Policy</Link>
-            </span>
-            {errors.terms && <p className="text-xs text-error-600 mt-1">{errors.terms}</p>}
           </div>
 
-          <Button type="submit" variant="primary" size="md" className="w-full" loading={loading}>
-            Create Account
-          </Button>
+          <div>
+            <label className="block text-sm font-semibold text-[#334155] mb-1.5">
+              Password
+            </label>
+            <Input
+              type="password"
+              placeholder="........"
+              value={formData.password}
+              onChange={(e) => set("password", (e.target as HTMLInputElement).value)}
+              error={errors.password}
+              className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#086f6c] hover:bg-[#065451] text-white py-3.5 px-4 font-bold transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer shadow-sm mt-2"
+            style={{ borderRadius: '8px' }}
+          >
+            {loading ? (
+              <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              "Create Account"
+            )}
+          </button>
         </form>
 
-        <p className="text-sm text-neutral-500 text-center mt-5">
-          Already have an account?{" "}
-          <Link href="/doctor/signin" className="text-primary-600 hover:underline font-medium">Sign in</Link>
+        <div className="relative my-6 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#e5e9f0]" /></div>
+          <span className="relative bg-white px-3 text-xs text-[#94a3b8] font-medium">or</span>
+        </div>
+
+        <button
+          type="button"
+          className="w-full bg-[#eaebed] hover:bg-[#e2e4e7] text-[#1e293b] py-3.5 px-4 font-bold transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer"
+          style={{ borderRadius: '8px' }}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span className="text-sm font-bold text-[#1e293b]">Continue with Google</span>
+        </button>
+
+        <p className="text-sm text-[#64748b] text-center mt-6">
+          Already registered?{" "}
+          <Link href="/doctor/signin" style={{ borderRadius: '0' }} className="text-[#086f6c] hover:underline font-bold">Sign In</Link>
         </p>
       </div>
     </div>

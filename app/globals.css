@@ -7,6 +7,7 @@
 
 @theme {
   --font-sans: "Google Sans Flex";
+  --font-figtree: "Figtree", sans-serif;
 
   /* Primary Healthcare Color: Medical Teal */
   --color-primary-50: #f0fdfa;
@@ -220,4 +221,8 @@ button, [role="button"] {
 
 .animate-toast-in {
   animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.font-figtree {
+  font-family: 'Figtree', sans-serif !important;
 }
