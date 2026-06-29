@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/drawer";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PlusSignIcon, Edit02Icon, EyeIcon, Delete01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { createClient } from "@/lib/supabase/client";
 
 type StaffMember = {
   id: string;
@@ -28,61 +29,12 @@ type StaffMember = {
   logs: { date: string; action: string }[];
 };
 
-const initialStaff: StaffMember[] = [
-  {
-    id: "d1", role: "doctor", name: "Dr. Anita Sharma", initials: "AS", email: "anita@zocare.health", phone: "+91 98765 43210", spec: "Cardiologist", regNo: "MH-12345", status: "active", joined: "Jan 2024",
-    logs: [
-      { date: "29 Jun 2026, 09:30 AM", action: "Logged in to portal" },
-      { date: "29 Jun 2026, 10:15 AM", action: "Prescribed Tab. Paracetamol 650mg to Priya Sharma" },
-      { date: "29 Jun 2026, 11:00 AM", action: "Completed consultation for Rahul Mehta" },
-    ]
-  },
-  {
-    id: "d2", role: "doctor", name: "Dr. Vikram Patel", initials: "VP", email: "vikram@zocare.health", phone: "+91 87654 32109", spec: "General Physician", regNo: "MH-12346", status: "active", joined: "Mar 2024",
-    logs: [
-      { date: "28 Jun 2026, 08:00 AM", action: "Logged in to portal" },
-      { date: "28 Jun 2026, 12:30 PM", action: "Updated patient profile for Arjun Nair" },
-    ]
-  },
-  {
-    id: "d3", role: "doctor", name: "Dr. Sneha Rao", initials: "SR", email: "sneha@zocare.health", phone: "+91 76543 21098", spec: "Dermatologist", regNo: "MH-12347", status: "active", joined: "Jun 2024",
-    logs: [
-      { date: "27 Jun 2026, 02:00 PM", action: "Logged in to portal" },
-    ]
-  },
-  {
-    id: "d4", role: "doctor", name: "Dr. Mohan Iyer", initials: "MI", email: "mohan@zocare.health", phone: "+91 65432 10987", spec: "Orthopedist", regNo: "MH-12348", status: "active", joined: "Sep 2024",
-    logs: []
-  },
-  {
-    id: "d5", role: "doctor", name: "Dr. Priya Nair", initials: "PN", email: "priya@zocare.health", phone: "+91 54321 09876", spec: "Gynecologist", regNo: "MH-12349", status: "inactive", joined: "Nov 2024",
-    logs: []
-  },
-  {
-    id: "r1", role: "receptionist", name: "Kavya Menon", initials: "KM", email: "kavya@zocare.health", phone: "+91 43210 98765", status: "active", joined: "Feb 2024",
-    logs: [
-      { date: "29 Jun 2026, 08:30 AM", action: "Logged in" },
-      { date: "29 Jun 2026, 08:45 AM", action: "Checked in patient Priya Sharma" },
-      { date: "29 Jun 2026, 09:10 AM", action: "Generated Invoice INV-000001" },
-    ]
-  },
-  {
-    id: "r2", role: "receptionist", name: "Rohan Sharma", initials: "RS", email: "rohan@zocare.health", phone: "+91 32109 87654", status: "active", joined: "Apr 2024",
-    logs: [
-      { date: "29 Jun 2026, 09:00 AM", action: "Logged in" },
-    ]
-  },
-  {
-    id: "r3", role: "receptionist", name: "Divya Pillai", initials: "DP", email: "divya@zocare.health", phone: "+91 21098 76543", status: "inactive", joined: "Jul 2024",
-    logs: []
-  },
-];
-
 const emptyForm = { role: "doctor", fullName: "", email: "", phone: "", spec: "", regNo: "", tempPassword: "", sendInvite: true };
 
 export default function DoctorStaffPage() {
   const [activeTab, setActiveTab] = useState("doctors");
-  const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
@@ -95,24 +47,74 @@ export default function DoctorStaffPage() {
 
   const setField = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleAddStaff = () => {
+  const loadStaff = async () => {
+    const supabase = createClient();
+    
+    const [doctorsRes, receptionistsRes] = await Promise.all([
+      supabase.from("doctors").select("id, full_name, email, phone, specialization, registration_no, is_active, created_at") as any,
+      supabase.from("receptionists").select("id, full_name, email, phone, is_active, created_at") as any
+    ]);
+
+    const mappedDoctors = (doctorsRes.data ?? []).map((d: any) => ({
+      id: d.id,
+      role: "doctor" as const,
+      name: d.full_name,
+      initials: d.full_name.replace("Dr. ", "").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+      email: d.email,
+      phone: d.phone ?? "—",
+      spec: d.specialization ?? "General Physician",
+      regNo: d.registration_no ?? "—",
+      status: d.is_active ? ("active" as const) : ("inactive" as const),
+      joined: d.created_at ? new Date(d.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—",
+      logs: [{ date: d.created_at ? new Date(d.created_at).toLocaleString() : "—", action: "Account created in clinic database" }]
+    }));
+
+    const mappedReceptionists = (receptionistsRes.data ?? []).map((r: any) => ({
+      id: r.id,
+      role: "receptionist" as const,
+      name: r.full_name,
+      initials: r.full_name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+      email: r.email,
+      phone: r.phone ?? "—",
+      status: r.is_active ? ("active" as const) : ("inactive" as const),
+      joined: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—",
+      logs: [{ date: r.created_at ? new Date(r.created_at).toLocaleString() : "—", action: "Account created in clinic database" }]
+    }));
+
+    setStaff([...mappedDoctors, ...mappedReceptionists]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  const handleAddStaff = async () => {
     if (!form.fullName || !form.email) return;
-    const newMember: StaffMember = {
-      id: Math.random().toString(36).substring(2, 9),
-      role: form.role as "doctor" | "receptionist",
-      name: form.fullName,
-      initials: form.fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
-      email: form.email,
-      phone: form.phone || "—",
-      spec: form.role === "doctor" ? form.spec : undefined,
-      regNo: form.role === "doctor" ? form.regNo : undefined,
-      status: "active",
-      joined: new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-      logs: [{ date: new Date().toLocaleString(), action: "Profile created and added to clinic staff" }]
-    };
-    setStaff((prev) => [...prev, newMember]);
+    const supabase = createClient();
+    setLoading(true);
+    if (form.role === "doctor") {
+      const { error } = await (supabase.from("doctors") as any).insert({
+        full_name: form.fullName,
+        email: form.email,
+        phone: form.phone || null,
+        specialization: form.spec || null,
+        registration_no: form.regNo || null,
+        is_active: true
+      });
+      if (error) { alert("Error adding doctor: " + error.message); setLoading(false); return; }
+    } else {
+      const { error } = await (supabase.from("receptionists") as any).insert({
+        full_name: form.fullName,
+        email: form.email,
+        phone: form.phone || null,
+        is_active: true
+      });
+      if (error) { alert("Error adding receptionist: " + error.message); setLoading(false); return; }
+    }
     setShowAddModal(false);
     setForm(emptyForm);
+    loadStaff();
   };
 
   const handleOpenEdit = (member: StaffMember) => {
@@ -127,35 +129,61 @@ export default function DoctorStaffPage() {
     });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingStaff) return;
-    setStaff((prev) =>
-      prev.map((s) =>
-        s.id === editingStaff.id
-          ? {
-              ...s,
-              name: editForm.name,
-              email: editForm.email,
-              phone: editForm.phone,
-              spec: s.role === "doctor" ? editForm.spec : undefined,
-              regNo: s.role === "doctor" ? editForm.regNo : undefined,
-              status: editForm.status as "active" | "inactive",
-            }
-          : s
-      )
-    );
+    const supabase = createClient();
+    setLoading(true);
+    const isAct = editForm.status === "active";
+    if (editingStaff.role === "doctor") {
+      const { error } = await (supabase.from("doctors") as any).update({
+        full_name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        specialization: editForm.spec || null,
+        registration_no: editForm.regNo || null,
+        is_active: isAct
+      }).eq("id", editingStaff.id);
+      if (error) { alert("Error updating doctor: " + error.message); setLoading(false); return; }
+    } else {
+      const { error } = await (supabase.from("receptionists") as any).update({
+        full_name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        is_active: isAct
+      }).eq("id", editingStaff.id);
+      if (error) { alert("Error updating receptionist: " + error.message); setLoading(false); return; }
+    }
     setEditingStaff(null);
+    loadStaff();
   };
 
-  const handleDeleteStaff = () => {
+  const handleDeleteStaff = async () => {
     if (!deletingStaff) return;
-    setStaff((prev) => prev.filter((s) => s.id !== deletingStaff.id));
+    const supabase = createClient();
+    setLoading(true);
+    if (deletingStaff.role === "doctor") {
+      const { error } = await (supabase.from("doctors") as any).delete().eq("id", deletingStaff.id);
+      if (error) { alert("Error deleting doctor: " + error.message); setLoading(false); return; }
+    } else {
+      const { error } = await (supabase.from("receptionists") as any).delete().eq("id", deletingStaff.id);
+      if (error) { alert("Error deleting receptionist: " + error.message); setLoading(false); return; }
+    }
     setDeletingStaff(null);
     setSelectedStaff(null);
+    loadStaff();
   };
 
   const doctorsList = staff.filter((s) => s.role === "doctor");
   const receptionistsList = staff.filter((s) => s.role === "receptionist");
+
+  if (loading) {
+    return (
+      <div className="space-y-5 animate-pulse">
+        <PageHeader title="Staff & Users" subtitle="Manage your clinic staff" />
+        <Card className="p-8 text-center text-sm text-neutral-400">Loading staff database...</Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

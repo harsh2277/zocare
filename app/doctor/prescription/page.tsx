@@ -7,6 +7,7 @@ import { ComboboxDropdown } from "@/components/ui/custom-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { createClient } from "@/lib/supabase/client";
 import {
   ArrowLeft01Icon,
   Search01Icon,
@@ -49,39 +50,72 @@ const medicineOptions = [
 export default function DoctorPrescriptionPage() {
   const router = useRouter();
 
-  // Load active patient from localStorage or fallback
-  const [activePatient, setActivePatient] = useState<any>({
-    id: "7",
-    token: 7,
-    name: "Asha Patel",
-    age: 67,
-    gender: "F",
-    complaint: "Swelling in ankles",
-    type: "Follow-up",
-    idNum: "OPD-2024-1042",
-    lastVisit: "14 Jun 2024"
-  });
+  const [activePatient, setActivePatient] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const getDoctorId = () => {
+    const stored = localStorage.getItem("doctor_id");
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (stored && uuidRegex.test(stored)) {
+      return stored;
+    }
+    return "d1000000-0000-0000-0000-000000000001";
+  };
+
+  const loadActiveConsultation = async () => {
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+    const docId = getDoctorId();
+    
     const activeId = localStorage.getItem("active_consultation_id");
-    const storedQueue = localStorage.getItem("doctor_queue_v2");
-    if (activeId && storedQueue) {
-      const queue = JSON.parse(storedQueue);
-      const match = queue.find((p: any) => p.id === activeId);
-      if (match) {
-        setActivePatient({
-          id: match.id,
-          token: match.token,
-          name: match.name,
-          age: match.age,
-          gender: match.gender,
-          complaint: match.complaint,
-          type: match.type || "OPD",
-          idNum: `OPD-2024-${1000 + Number(match.token)}`,
-          lastVisit: "14 Jun 2024"
-        });
+    let query = supabase
+      .from("queue_entries")
+      .select(`id, token_number, checked_in_at, notes, appointment_id, patient_id, doctor_id,
+        patients(id, patient_id, full_name, date_of_birth, gender, allergies, notes, blood_group),
+        appointments(id, type, chief_complaint)`);
+        
+    if (activeId) {
+      query = query.eq("id", activeId);
+    } else {
+      query = query.eq("doctor_id", docId).eq("queue_date", today).eq("status", "in_progress");
+    }
+    
+    const { data, error } = await (query.maybeSingle() as any);
+
+    if (data && !error) {
+      const birthDate = data.patients?.date_of_birth;
+      let age = 0;
+      if (birthDate) {
+        age = Math.floor((Date.now() - new Date(birthDate).getTime()) / 31536000000);
+      }
+      setActivePatient({
+        id: data.id,
+        patient_uuid: data.patients?.id,
+        appointment_id: data.appointment_id,
+        patient_id: data.patients?.patient_id,
+        token: data.token_number,
+        name: data.patients?.full_name,
+        age: age,
+        gender: data.patients?.gender === "male" ? "M" : data.patients?.gender === "female" ? "F" : "O",
+        complaint: data.appointments?.chief_complaint ?? data.notes ?? "",
+        type: data.appointments?.type === "consultation" ? "OPD" :
+              data.appointments?.type === "follow_up" ? "Follow-up" :
+              data.appointments?.type === "emergency" ? "Emergency" : "Routine",
+        idNum: data.patients?.patient_id,
+        lastVisit: "Today",
+        blood: data.patients?.blood_group ?? "—",
+        allergies: data.patients?.allergies ? data.patients.allergies.split(",") : [],
+      });
+      
+      if (data.appointments?.chief_complaint) {
+        setChiefComplaint(data.appointments.chief_complaint);
       }
     }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadActiveConsultation();
   }, []);
 
   // Textarea state
@@ -230,22 +264,105 @@ export default function DoctorPrescriptionPage() {
   };
 
   // Save / Complete Consultation handler
-  const completeConsultation = () => {
+  const completeConsultation = async () => {
+    if (!activePatient) return;
+    
+    const supabase = createClient();
+    
+    // 1. Insert into prescriptions table
+    const prescriptionNo = `RX-${Math.floor(100000 + Math.random() * 900000)}`;
+    const { data: prescriptionData, error: rxErr } = await (supabase
+      .from("prescriptions") as any)
+      .insert({
+        prescription_no: prescriptionNo,
+        patient_id: activePatient.patient_uuid,
+        doctor_id: getDoctorId(),
+        appointment_id: activePatient.appointment_id,
+        diagnosis: chiefComplaint,
+        chief_complaint: chiefComplaint,
+        notes: doctorsAdvice,
+        follow_up_date: followUpDate || null,
+        status: "active"
+      })
+      .select("id")
+      .single() as unknown as { data: { id: string } | null; error: any };
+
+    if (rxErr) {
+      alert("Error saving prescription: " + rxErr.message);
+      return;
+    }
+
+    // 2. Insert prescription items
+    if (medicines.length > 0) {
+      const itemsPayload = medicines.map((m, index) => {
+        let frequency = "";
+        if (m.m) frequency += "1-"; else frequency += "0-";
+        if (m.a) frequency += "1-"; else frequency += "0-";
+        if (m.n) frequency += "1"; else frequency += "0";
+        
+        return {
+          prescription_id: prescriptionData!.id,
+          medicine_name: m.name,
+          dosage: m.dosage,
+          frequency: frequency,
+          duration: `${m.days} days`,
+          instructions: m.instructions,
+          route: "oral",
+          quantity: m.days * ( (m.m ? 1 : 0) + (m.a ? 1 : 0) + (m.n ? 1 : 0) ),
+          sort_order: index
+        };
+      });
+
+      const { error: itemsErr } = await (supabase
+        .from("prescription_items") as any)
+        .insert(itemsPayload);
+
+      if (itemsErr) {
+        alert("Error saving prescription items: " + itemsErr.message);
+      }
+    }
+
+    // 3. Mark queue entry as completed
+    await (supabase
+      .from("queue_entries") as any)
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", activePatient.id);
+
+    // 4. Mark appointment as completed
+    if (activePatient.appointment_id) {
+      await (supabase
+        .from("appointments") as any)
+        .update({ status: "completed" })
+        .eq("id", activePatient.appointment_id);
+    }
+
     // Print prescription
     window.print();
 
-    const storedQueue = localStorage.getItem("doctor_queue_v2");
-    if (storedQueue) {
-      const queue = JSON.parse(storedQueue);
-      const updated = queue.map((p: any) =>
-        p.id === activePatient.id ? { ...p, status: "completed" as const } : p
-      );
-      localStorage.setItem("doctor_queue_v2", JSON.stringify(updated));
-    }
     localStorage.removeItem("active_consultation_id");
     window.dispatchEvent(new Event("active_consultation_changed"));
     router.push("/doctor/dashboard");
   };
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#F1F5F9]">
+        <Card className="p-8 text-center text-sm text-neutral-400 animate-pulse">Loading patient consultation...</Card>
+      </div>
+    );
+  }
+
+  if (!activePatient) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#F1F5F9] gap-4">
+        <Card className="p-8 text-center max-w-md">
+          <h2 className="text-lg font-bold text-neutral-800 mb-2">No Active Consultation</h2>
+          <p className="text-sm text-neutral-500 mb-4">Please select a patient from the dashboard or live queue to write a prescription.</p>
+          <Button variant="primary" onClick={() => router.push("/doctor/dashboard")}>Go to Dashboard</Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <>

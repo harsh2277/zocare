@@ -3,21 +3,38 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DoctorSigninPage() {
   const router = useRouter();
-  const [licenseNumber, setLicenseNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!licenseNumber) { setError("Please enter your Medical License Number."); return; }
+    if (!email) { setError("Please enter your Email Address."); return; }
     if (!password) { setError("Please enter your password."); return; }
     setError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
+
+    const supabase = createClient();
+    const { data: doctor, error: docErr } = await (supabase
+      .from("doctors")
+      .select("id, email, full_name, specialization")
+      .eq("email", email.trim())
+      .maybeSingle() as any);
+
+    if (docErr || !doctor) {
+      setLoading(false);
+      setError("Doctor email address not found in clinic records.");
+      return;
+    }
+
+    localStorage.setItem("doctor_id", doctor.id);
+    localStorage.setItem("doctor_name", doctor.full_name);
+    localStorage.setItem("doctor_specialization", doctor.specialization || "Cardiologist");
     setLoading(false);
     router.push("/doctor/dashboard");
   };
@@ -34,13 +51,13 @@ export default function DoctorSigninPage() {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-sm font-semibold text-[#334155] mb-1.5">
-              Medical License Number
+              Email Address
             </label>
             <Input
               type="text"
-              placeholder="REG-12345"
-              value={licenseNumber}
-              onChange={(e) => setLicenseNumber((e.target as HTMLInputElement).value)}
+              placeholder="e.g. sarah.ahmed@zocare.health"
+              value={email}
+              onChange={(e) => setEmail((e.target as HTMLInputElement).value)}
               className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
             />
           </div>

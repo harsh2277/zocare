@@ -48,6 +48,25 @@ export const DoctorTopBar = () => {
   const displaySub = meta?.[1].breadcrumb || "Doctor Portal · Morning Clinic";
   const unreadCount = notifications.filter((n) => n.unread).length;
 
+  const [docName, setDocName] = useState("Dr. Sarah Ahmed");
+  const [docSpec, setDocSpec] = useState("Cardiologist");
+
+  useEffect(() => {
+    const name = localStorage.getItem("doctor_name");
+    const spec = localStorage.getItem("doctor_specialization");
+    if (name) setDocName(name);
+    if (spec) setDocSpec(spec);
+  }, []);
+
+  const initials = docName
+    ? docName
+        .split(" ")
+        .filter((w) => !w.toLowerCase().startsWith("dr"))
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "DR";
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
@@ -126,10 +145,10 @@ export const DoctorTopBar = () => {
             onClick={() => { setShowUser((v) => !v); setShowNotif(false); }}
             className="flex items-center gap-2.5 hover:bg-neutral-50 rounded-lg px-2 py-1.5 transition-colors cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">SA</div>
+            <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
             <div className="text-left hidden sm:block">
-              <p className="text-xs font-semibold text-neutral-800 leading-tight">Dr. Sarah Ahmed</p>
-              <p className="text-[10px] text-neutral-400 leading-tight">Cardiologist</p>
+              <p className="text-xs font-semibold text-neutral-800 leading-tight">{docName}</p>
+              <p className="text-[10px] text-neutral-400 leading-tight">{docSpec}</p>
             </div>
             <HugeiconsIcon icon={ChevronDownIcon} className="w-3.5 h-3.5 text-neutral-400" />
           </button>
@@ -137,8 +156,8 @@ export const DoctorTopBar = () => {
           {showUser && (
             <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-neutral-200 rounded-xl z-50 overflow-hidden shadow-lg">
               <div className="px-4 py-3 border-b border-neutral-100">
-                <p className="text-sm font-semibold text-neutral-800">Dr. Sarah Ahmed</p>
-                <p className="text-xs text-neutral-500 mt-0.5">Cardiology Specialist</p>
+                <p className="text-sm font-semibold text-neutral-800">{docName}</p>
+                <p className="text-xs text-neutral-500 mt-0.5">{docSpec} Specialist</p>
               </div>
               <div className="p-2">
                 <Button

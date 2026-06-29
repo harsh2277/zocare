@@ -13,6 +13,9 @@ import { Tabs } from "@/components/ui/tabs";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UserGroupIcon, Search01Icon, EyeIcon, PrescriptionIcon, Delete01Icon, Invoice03Icon, AlertCircleIcon, CheckmarkCircle01Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 
+import { createClient } from "@/lib/supabase/client";
+import { useEffect } from "react";
+
 type Visit = { date: string; reason: string; diagnosis: string; doctor: string };
 type RxRecord = { date: string; drugs: string[]; status: "active" | "completed" };
 type Bill = { invoiceNo: string; date: string; service: string; amount: number; paid: number; status: "paid" | "partial" | "issued" };
@@ -24,96 +27,6 @@ type Patient = {
   allergies: string; medications: string[]; notes: string;
   visits: Visit[]; prescriptions: RxRecord[]; bills: Bill[];
 };
-
-const mockPatients: Patient[] = [
-  {
-    id:"1", pid:"ZC-0001", name:"Priya Sharma", age:34, gender:"F", phone:"+91 98765 43210", address:"Flat 402, Shanti Vihar, Mumbai", bloodType:"O+", diagnosis:"Hypertension",
-    lastVisit:"20 Jun 2026", nextAppt:"25 Jul 2026", status:"active", allergies:"None",
-    medications:["Amlodipine 5mg"], notes:"BP controlled. Continue medication.",
-    visits:[
-      { date:"20 Jun 2026", reason:"Routine BP review", diagnosis:"Hypertension", doctor:"Dr. Anita Sharma" },
-      { date:"22 May 2026", reason:"Headache, dizziness", diagnosis:"Hypertension", doctor:"Dr. Anita Sharma" },
-      { date:"18 Apr 2026", reason:"First consultation", diagnosis:"Hypertension", doctor:"Dr. Anita Sharma" },
-    ],
-    prescriptions:[
-      { date:"20 Jun 2026", drugs:["Amlodipine 5mg"], status:"active" },
-      { date:"22 May 2026", drugs:["Amlodipine 2.5mg","Aspirin 75mg"], status:"completed" },
-    ],
-    bills:[
-      { invoiceNo:"INV-000001", date:"20 Jun 2026", service:"Consultation + ECG", amount:1500, paid:1500, status:"paid" },
-      { invoiceNo:"INV-000045", date:"22 May 2026", service:"Consultation", amount:800, paid:800, status:"paid" },
-    ],
-  },
-  {
-    id:"2", pid:"ZC-0002", name:"Rahul Mehta", age:28, gender:"M", phone:"+91 87654 32109", address:"12, Park Street, Kolkata", bloodType:"A+", diagnosis:"Acute Bronchitis",
-    lastVisit:"18 Jun 2026", nextAppt:"Not scheduled", status:"follow_up", allergies:"Penicillin",
-    medications:["Azithromycin 500mg","Broncodil"], notes:"Follow up after 1 week.",
-    visits:[
-      { date:"18 Jun 2026", reason:"Fever and cough for 5 days", diagnosis:"Acute Bronchitis", doctor:"Dr. Vikram Patel" },
-    ],
-    prescriptions:[
-      { date:"18 Jun 2026", drugs:["Azithromycin 500mg","Broncodil Syrup"], status:"active" },
-    ],
-    bills:[
-      { invoiceNo:"INV-000002", date:"18 Jun 2026", service:"Consultation + Nebulization", amount:2200, paid:0, status:"issued" },
-    ],
-  },
-  {
-    id:"3", pid:"ZC-0003", name:"Meera Krishnan", age:45, gender:"F", phone:"+91 76543 21098", address:"Block C, Green Glen, Bangalore", bloodType:"B-", diagnosis:"Type 2 Diabetes",
-    lastVisit:"15 Jun 2026", nextAppt:"15 Jul 2026", status:"active", allergies:"Sulfa drugs",
-    medications:["Metformin 500mg","Glimepiride"], notes:"HbA1c improving. Diet compliance good.",
-    visits:[
-      { date:"15 Jun 2026", reason:"Quarterly diabetes review", diagnosis:"Type 2 Diabetes", doctor:"Dr. Anita Sharma" },
-      { date:"12 Mar 2026", reason:"HbA1c follow-up", diagnosis:"Type 2 Diabetes", doctor:"Dr. Anita Sharma" },
-    ],
-    prescriptions:[
-      { date:"15 Jun 2026", drugs:["Metformin 500mg","Glimepiride 1mg"], status:"active" },
-    ],
-    bills:[
-      { invoiceNo:"INV-000003", date:"15 Jun 2026", service:"Consultation + Blood Test Package", amount:4500, paid:2000, status:"partial" },
-    ],
-  },
-  {
-    id:"4", pid:"ZC-0004", name:"Arjun Nair", age:22, gender:"M", phone:"+91 65432 10987", address:"Prithvi Enclave, Kochi", bloodType:"O-", diagnosis:"Viral Fever",
-    lastVisit:"12 Jun 2026", nextAppt:"Not scheduled", status:"active", allergies:"None",
-    medications:["Paracetamol 500mg"], notes:"Recovered. No follow-up needed.",
-    visits:[{ date:"12 Jun 2026", reason:"Fever and body ache", diagnosis:"Viral Fever", doctor:"Dr. Vikram Patel" }],
-    prescriptions:[{ date:"12 Jun 2026", drugs:["Paracetamol 500mg"], status:"completed" }],
-    bills:[{ invoiceNo:"INV-000004", date:"12 Jun 2026", service:"Consultation", amount:800, paid:800, status:"paid" }],
-  },
-  {
-    id:"5", pid:"ZC-0005", name:"Sunita Gupta", age:58, gender:"F", phone:"+91 91234 56789", address:"A-45, Ashok Vihar, Delhi", bloodType:"AB+", diagnosis:"Osteoarthritis",
-    lastVisit:"10 Jun 2026", nextAppt:"10 Jul 2026", status:"active", allergies:"NSAIDs",
-    medications:["Calcium 500mg","Vitamin D3"], notes:"Physiotherapy recommended.",
-    visits:[{ date:"10 Jun 2026", reason:"Joint pain in both knees", diagnosis:"Osteoarthritis", doctor:"Dr. Mohan Iyer" }],
-    prescriptions:[{ date:"10 Jun 2026", drugs:["Calcium 500mg","Vitamin D3"], status:"active" }],
-    bills:[{ invoiceNo:"INV-000005", date:"10 Jun 2026", service:"Physiotherapy (3x)", amount:3600, paid:3600, status:"paid" }],
-  },
-  {
-    id:"6", pid:"ZC-0006", name:"Kiran Desai", age:41, gender:"M", phone:"+91 92345 67890", address:"45/A, MG Road, Pune", bloodType:"B+", diagnosis:"GERD",
-    lastVisit:"8 Jun 2026", nextAppt:"8 Jul 2026", status:"active", allergies:"None",
-    medications:["Pantoprazole 40mg"], notes:"Lifestyle modifications advised.",
-    visits:[{ date:"8 Jun 2026", reason:"Acidity and bloating", diagnosis:"GERD", doctor:"Dr. Vikram Patel" }],
-    prescriptions:[{ date:"8 Jun 2026", drugs:["Pantoprazole 40mg"], status:"active" }],
-    bills:[{ invoiceNo:"INV-000006", date:"8 Jun 2026", service:"Endoscopy Procedure", amount:8500, paid:0, status:"issued" }],
-  },
-  {
-    id:"7", pid:"ZC-0007", name:"Asha Patel", age:67, gender:"F", phone:"+91 93456 78901", address:"Shanti Park, Ahmedabad", bloodType:"A-", diagnosis:"Heart Failure",
-    lastVisit:"5 Jun 2026", nextAppt:"19 Jun 2026", status:"follow_up", allergies:"Aspirin",
-    medications:["Furosemide","Spironolactone"], notes:"Monitor fluid retention.",
-    visits:[{ date:"5 Jun 2026", reason:"Swelling in ankles", diagnosis:"Heart Failure", doctor:"Dr. Anita Sharma" }],
-    prescriptions:[{ date:"5 Jun 2026", drugs:["Furosemide 40mg","Spironolactone 25mg"], status:"active" }],
-    bills:[{ invoiceNo:"INV-000007", date:"5 Jun 2026", service:"Cardiology Review", amount:3200, paid:3200, status:"paid" }],
-  },
-  {
-    id:"8", pid:"ZC-0008", name:"Dev Joshi", age:19, gender:"M", phone:"+91 94567 89012", address:"Model Town, Jaipur", bloodType:"AB-", diagnosis:"Allergic Rhinitis",
-    lastVisit:"1 Jun 2026", nextAppt:"Not scheduled", status:"active", allergies:"Dust mites",
-    medications:["Cetirizine 10mg","Nasal spray"], notes:"Avoid allergen exposure.",
-    visits:[{ date:"1 Jun 2026", reason:"Runny nose and sneezing", diagnosis:"Allergic Rhinitis", doctor:"Dr. Sneha Rao" }],
-    prescriptions:[{ date:"1 Jun 2026", drugs:["Cetirizine 10mg","Nasal Spray"], status:"completed" }],
-    bills:[{ invoiceNo:"INV-000008", date:"1 Jun 2026", service:"Consultation", amount:1200, paid:0, status:"issued" }],
-  },
-];
 
 const statusBadge: Record<string, "success" | "info" | "neutral"> = {
   active: "success", follow_up: "info", discharged: "neutral",
@@ -133,12 +46,77 @@ const filterTabs = [
 
 export default function DoctorPatientsPage() {
   const router = useRouter();
-  const [patients, setPatients] = useState<Patient[]>(mockPatients);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [drawerTab, setDrawerTab] = useState("overview");
   const [toDelete, setToDelete] = useState<Patient | null>(null);
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      const supabase = createClient();
+      const { data, error } = await (supabase
+        .from("patients")
+        .select(`
+          id, patient_id, full_name, date_of_birth, gender, phone, address, blood_group, allergies, notes,
+          appointments(id, type, appointment_date, status, chief_complaint, doctors(full_name)),
+          prescriptions(id, prescription_no, created_at, status, prescription_items(medicine_name))
+        `) as any);
+
+      if (data && !error) {
+        const mapped: Patient[] = data.map((p: any) => {
+          const birthDate = p.date_of_birth;
+          let age = 0;
+          if (birthDate) {
+            age = Math.floor((Date.now() - new Date(birthDate).getTime()) / 31536000000);
+          }
+          
+          const visits = (p.appointments ?? []).map((appt: any) => ({
+            date: appt.appointment_date ? new Date(appt.appointment_date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            reason: appt.chief_complaint ?? appt.type ?? "OPD Review",
+            diagnosis: appt.chief_complaint ?? "OPD Review",
+            doctor: appt.doctors?.full_name ?? "Dr. Sarah Ahmed"
+          }));
+
+          const prescriptions = (p.prescriptions ?? []).map((rx: any) => ({
+            date: rx.created_at ? new Date(rx.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            drugs: (rx.prescription_items ?? []).map((item: any) => item.medicine_name),
+            status: rx.status === "active" ? "active" : "completed"
+          }));
+
+          const hasActiveAppt = (p.appointments ?? []).some((appt: any) => appt.status !== "completed");
+          const status = hasActiveAppt ? "active" : "discharged";
+
+          return {
+            id: p.id,
+            pid: p.patient_id,
+            name: p.full_name,
+            age: age,
+            gender: p.gender === "male" ? "M" : p.gender === "female" ? "F" : "O",
+            phone: p.phone ?? "—",
+            address: p.address ?? "—",
+            bloodType: p.blood_group ?? "—",
+            diagnosis: p.notes ?? "Regular Checkup",
+            lastVisit: visits[0]?.date ?? "—",
+            nextAppt: "Not scheduled",
+            status: status,
+            allergies: p.allergies ?? "None",
+            medications: prescriptions[0]?.drugs ?? [],
+            notes: p.notes ?? "",
+            visits: visits,
+            prescriptions: prescriptions,
+            bills: []
+          };
+        });
+        setPatients(mapped);
+      }
+      setLoading(false);
+    };
+
+    fetchPatients();
+  }, []);
 
   const filtered = patients.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.pid.includes(search);
@@ -157,6 +135,15 @@ export default function DoctorPatientsPage() {
     if (selectedPatient?.id === toDelete.id) setSelectedPatient(null);
     setToDelete(null);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-5 w-full animate-pulse">
+        <PageHeader title="My Patients" subtitle="All patients under your care" />
+        <Card className="p-8 text-center text-sm text-neutral-400">Loading patient database...</Card>
+      </div>
+    );
+  }
 
   const statCards = [
     { title: "Total Patients", value: String(patients.length), icon: UserGroupIcon, subtitle: "Registered patients", subtitleColor: "text-neutral-500" },

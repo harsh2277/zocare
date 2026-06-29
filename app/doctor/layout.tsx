@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/app/doctor-sidebar";
 import { DoctorTopBar } from "@/components/app/doctor-top-bar";
 
@@ -9,22 +9,65 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Clock01Icon, PrescriptionIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 
+import { createClient } from "@/lib/supabase/client";
+
 const FULLSCREEN_ROUTES = ["/doctor/signin", "/doctor/signup", "/doctor/forgot-password", "/doctor/prescription"];
 
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isFullscreen = FULLSCREEN_ROUTES.some((route) => pathname?.startsWith(route));
   
   const [activeConsultation, setActiveConsultation] = useState<any>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(504);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const checkActive = () => {
-    const activeId = localStorage.getItem("active_consultation_id");
-    if (activeId) {
-      const storedQueue = localStorage.getItem("doctor_queue_v2");
-      const queue = storedQueue ? JSON.parse(storedQueue) : [];
-      const match = queue.find((p: any) => p.id === activeId && p.status === "in_progress");
-      setActiveConsultation(match || null);
+  const getDoctorId = () => {
+    const stored = localStorage.getItem("doctor_id");
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (stored && uuidRegex.test(stored)) {
+      return stored;
+    }
+    return "d1000000-0000-0000-0000-000000000001";
+  };
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      const docId = localStorage.getItem("doctor_id");
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!docId || !uuidRegex.test(docId)) {
+        router.replace("/doctor/signin");
+      }
+    }
+  }, [isFullscreen, pathname, router]);
+
+  const checkActive = async () => {
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+    const docId = getDoctorId();
+    
+    const { data, error } = await (supabase
+      .from("queue_entries")
+      .select(`id, token_number, status, checked_in_at, notes, appointment_id,
+        patients(patient_id, full_name, date_of_birth, gender),
+        appointments(type, chief_complaint)`)
+      .eq("doctor_id", docId)
+      .eq("queue_date", today)
+      .eq("status", "in_progress")
+      .maybeSingle() as any);
+
+    if (data && !error) {
+      setActiveConsultation({
+        id: data.id,
+        token: data.token_number,
+        name: data.patients?.full_name ?? "Patient",
+        type: data.appointments?.type ?? "OPD",
+        complaint: data.appointments?.chief_complaint ?? data.notes ?? "",
+        patient_id: data.patients?.patient_id ?? "",
+        appointment_id: data.appointment_id
+      });
+      // Calculate elapsed time from checked_in_at or called_at
+      const startTime = data.checked_in_at ? new Date(data.checked_in_at).getTime() : Date.now();
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
     } else {
       setActiveConsultation(null);
     }
@@ -55,15 +98,22 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     return () => clearInterval(interval);
   }, [activeConsultation]);
 
-  const endActiveConsultation = () => {
+  const endActiveConsultation = async () => {
     if (!activeConsultation) return;
-    const activeId = activeConsultation.id;
-    const storedQueue = localStorage.getItem("doctor_queue_v2");
-    if (storedQueue) {
-      const queue = JSON.parse(storedQueue);
-      const updated = queue.map((p: any) => p.id === activeId ? { ...p, status: "completed" } : p);
-      localStorage.setItem("doctor_queue_v2", JSON.stringify(updated));
+    const supabase = createClient();
+    
+    await (supabase
+      .from("queue_entries") as any)
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", activeConsultation.id);
+
+    if (activeConsultation.appointment_id) {
+      await (supabase
+        .from("appointments") as any)
+        .update({ status: "completed" })
+        .eq("id", activeConsultation.appointment_id);
     }
+
     localStorage.removeItem("active_consultation_id");
     setActiveConsultation(null);
     window.dispatchEvent(new Event("active_consultation_changed"));
@@ -132,6 +182,7 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
               <div className="flex flex-row items-center gap-[16px]">
                 <button
                   type="button"
+                  onClick={() => router.push("/doctor/prescription")}
                   className="box-sizing-border flex flex-row justify-center items-center px-5 h-[37px] border border-white rounded-[8px] font-semibold text-[14px] text-white leading-[17px] bg-transparent hover:bg-white/10 transition-all active:scale-95 cursor-pointer"
                 >
                   Write Prescription

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ReceptionistLoginPage() {
   const router = useRouter();
@@ -20,12 +21,27 @@ export default function ReceptionistLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: { employeeId?: string; password?: string } = {};
-    if (!employeeId.trim()) errs.employeeId = "Employee ID not found";
-    if (!password) errs.password = "Incorrect password";
+    if (!employeeId.trim()) errs.employeeId = "Email Address required";
+    if (!password) errs.password = "Password required";
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+
+    const supabase = createClient();
+    const { data: receptionist, error: recepErr } = await (supabase
+      .from("receptionists")
+      .select("id, email, full_name")
+      .eq("email", employeeId.trim())
+      .maybeSingle() as any);
+
+    if (recepErr || !receptionist) {
+      setLoading(false);
+      setErrors({ employeeId: "Receptionist email not found in clinic records." });
+      return;
+    }
+
+    localStorage.setItem("receptionist_id", receptionist.id);
+    localStorage.setItem("receptionist_name", receptionist.full_name);
     setLoading(false);
     router.push("/receptionist/dashboard");
   };
@@ -60,8 +76,8 @@ export default function ReceptionistLoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <Input
-            label="Employee ID"
-            placeholder="e.g. EMP-10294"
+            label="Email Address"
+            placeholder="e.g. mary.joseph@zocare.health"
             value={employeeId}
             onChange={(e) => { setEmployeeId((e.target as HTMLInputElement).value); clearError("employeeId"); }}
             error={errors.employeeId}

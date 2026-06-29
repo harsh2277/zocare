@@ -11,6 +11,9 @@ import { Select } from "@/components/ui/select";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon, EyeIcon, DownloadSquare01Icon, Invoice03Icon } from "@hugeicons/core-free-icons";
 
+import { createClient } from "@/lib/supabase/client";
+import { useEffect } from "react";
+
 type Invoice = {
   id: string; invoiceNo: string; patient: string; initials: string;
   service: string; extraItems: number; amount: number; paid: number;
@@ -18,82 +21,74 @@ type Invoice = {
   itemsList?: { desc: string; qty: number; price: number }[];
 };
 
-const initialInvoices: Invoice[] = [
-  {
-    id:"1", invoiceNo:"INV-000001", patient:"Priya Sharma", initials:"PS", service:"Consultation", extraItems:1, amount:1500, paid:1500, status:"paid", date:"20 Jun 2026",
-    itemsList: [
-      { desc: "General Consultation", qty: 1, price: 800 },
-      { desc: "ECG Test", qty: 1, price: 700 }
-    ]
-  },
-  {
-    id:"2", invoiceNo:"INV-000002", patient:"Rahul Mehta", initials:"RM", service:"Consultation", extraItems:2, amount:2200, paid:0, status:"issued", date:"18 Jun 2026",
-    itemsList: [
-      { desc: "General Consultation", qty: 1, price: 800 },
-      { desc: "Nebulization Session", qty: 1, price: 800 },
-      { desc: "Broncodil Cough Syrup", qty: 2, price: 300 }
-    ]
-  },
-  {
-    id:"3", invoiceNo:"INV-000003", patient:"Meera Krishnan", initials:"MK", service:"Blood Test Package", extraItems:3, amount:4500, paid:2000, status:"partial", date:"15 Jun 2026",
-    itemsList: [
-      { desc: "Diabetes Review Panel", qty: 1, price: 2500 },
-      { desc: "Consultation Fee", qty: 1, price: 800 },
-      { desc: "Metformin 500mg (60 tabs)", qty: 2, price: 600 }
-    ]
-  },
-  {
-    id:"4", invoiceNo:"INV-000004", patient:"Arjun Nair", initials:"AN", service:"Consultation", extraItems:0, amount:800, paid:800, status:"paid", date:"12 Jun 2026",
-    itemsList: [
-      { desc: "General Consultation", qty: 1, price: 800 }
-    ]
-  },
-  {
-    id:"5", invoiceNo:"INV-000005", patient:"Sunita Gupta", initials:"SG", service:"Physiotherapy (3x)", extraItems:1, amount:3600, paid:3600, status:"paid", date:"10 Jun 2026",
-    itemsList: [
-      { desc: "Physiotherapy Session", qty: 3, price: 1000 },
-      { desc: "Calcium Supplements", qty: 1, price: 600 }
-    ]
-  },
-  {
-    id:"6", invoiceNo:"INV-000006", patient:"Kiran Desai", initials:"KD", service:"Endoscopy Procedure", extraItems:2, amount:8500, paid:0, status:"draft", date:"8 Jun 2026",
-    itemsList: [
-      { desc: "Upper Endoscopy", qty: 1, price: 7000 },
-      { desc: "Anaesthesia & Sedatives", qty: 1, price: 1000 },
-      { desc: "Pantoprazole 40mg", qty: 1, price: 500 }
-    ]
-  },
-  {
-    id:"7", invoiceNo:"INV-000007", patient:"Asha Patel", initials:"AP", service:"Cardiology Review", extraItems:3, amount:3200, paid:3200, status:"paid", date:"5 Jun 2026",
-    itemsList: [
-      { desc: "Cardiology Consultation", qty: 1, price: 1500 },
-      { desc: "Echocardiogram", qty: 1, price: 1200 },
-      { desc: "Medication Bundle", qty: 1, price: 500 }
-    ]
-  },
-  {
-    id:"8", invoiceNo:"INV-000008", patient:"Dev Joshi", initials:"DJ", service:"Consultation", extraItems:1, amount:1200, paid:0, status:"cancelled", date:"1 Jun 2026",
-    itemsList: [
-      { desc: "General Consultation", qty: 1, price: 800 },
-      { desc: "Allergy Spray", qty: 1, price: 400 }
-    ]
-  },
-];
-
 const statusVariant: Record<string, "success" | "warning" | "info" | "neutral" | "error"> = {
   paid: "success", issued: "info", partial: "warning", draft: "neutral", cancelled: "error", refunded: "neutral",
 };
 
 export default function DoctorBillingPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
-  const filtered = initialInvoices.filter((inv) => {
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      const supabase = createClient();
+      const { data, error } = await (supabase
+        .from("billing_invoices")
+        .select(`
+          id, invoice_no, subtotal, discount, tax, total, paid_amount, status, created_at,
+          patients(full_name),
+          billing_invoice_items(description, quantity, unit_price, total_price)
+        `)
+        .order("created_at", { ascending: false }) as any);
+
+      if (data && !error) {
+        const mapped: Invoice[] = data.map((inv: any) => {
+          const patientName = inv.patients?.full_name ?? "Unknown Patient";
+          const initials = patientName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+          const items = (inv.billing_invoice_items ?? []).map((item: any) => ({
+            desc: item.description,
+            qty: item.quantity,
+            price: Number(item.unit_price)
+          }));
+          return {
+            id: inv.id,
+            invoiceNo: inv.invoice_no,
+            patient: patientName,
+            initials: initials,
+            service: items[0]?.desc ?? "Medical Treatment",
+            extraItems: Math.max(0, items.length - 1),
+            amount: Number(inv.total),
+            paid: Number(inv.paid_amount),
+            status: inv.status,
+            date: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            itemsList: items
+          };
+        });
+        setInvoices(mapped);
+      }
+      setLoading(false);
+    };
+
+    fetchInvoices();
+  }, []);
+
+  const filtered = invoices.filter((inv) => {
     const ms = inv.patient.toLowerCase().includes(search.toLowerCase()) || inv.invoiceNo.includes(search);
     const mf = !filterStatus || inv.status === filterStatus;
     return ms && mf;
   });
+
+  if (loading) {
+    return (
+      <div className="space-y-5 w-full animate-pulse">
+        <PageHeader title="Billing" subtitle="Invoices and payment management" />
+        <Card className="p-8 text-center text-sm text-neutral-400">Loading invoice records...</Card>
+      </div>
+    );
+  }
 
   const handleDownloadInvoice = (inv: Invoice) => {
     alert(`Downloading ${inv.invoiceNo} PDF to your local downloads directory...`);

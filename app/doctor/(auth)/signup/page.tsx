@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { createClient } from "@/lib/supabase/client";
 
 const specializationOptions = [
   { value: "", label: "Select..." },
@@ -52,7 +53,28 @@ export default function DoctorSignupPage() {
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
+    const supabase = createClient();
+    const { data: newDoc, error: insertErr } = await (supabase
+      .from("doctors") as any)
+      .insert({
+        full_name: formData.fullName.trim(),
+        email: formData.email.trim(),
+        specialization: formData.specialization,
+        registration_no: formData.registrationNo.trim(),
+        is_active: true
+      })
+      .select("id")
+      .single() as any;
+
+    if (insertErr) {
+      setLoading(false);
+      setErrors({ form: "Error registering doctor: " + insertErr.message });
+      return;
+    }
+
+    localStorage.setItem("doctor_id", newDoc.id);
+    localStorage.setItem("doctor_name", formData.fullName.trim());
+    localStorage.setItem("doctor_specialization", formData.specialization);
     setLoading(false);
     router.push("/doctor/dashboard");
   };
@@ -151,6 +173,10 @@ export default function DoctorSignupPage() {
               className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
             />
           </div>
+
+          {errors.form && (
+            <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errors.form}</p>
+          )}
 
           <button
             type="submit"

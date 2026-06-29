@@ -24,82 +24,130 @@ type QueueEntry = {
   type: string;
 };
 
-const initialQueue: QueueEntry[] = [
-  { id: "1", token: 1, name: "Priya Sharma", age: 34, gender: "F", checkedIn: "09:05 AM", complaint: "Chest pain and breathlessness", waitMins: 0, status: "waiting", type: "OPD" },
-  { id: "2", token: 2, name: "Rahul Mehta", age: 28, gender: "M", checkedIn: "09:30 AM", complaint: "Fever and cough for 5 days", waitMins: 0, status: "waiting", type: "Routine" },
-  { id: "3", token: 3, name: "Meera Krishnan", age: 45, gender: "F", checkedIn: "10:15 AM", complaint: "Fever and headache for 3 days", waitMins: 0, status: "in_progress", type: "OPD" },
-  { id: "4", token: 4, name: "Arjun Nair", age: 22, gender: "M", checkedIn: "10:30 AM", complaint: "Throat pain and difficulty swallowing", waitMins: 35, status: "waiting", type: "New Patient" },
-  { id: "5", token: 5, name: "Sunita Gupta", age: 58, gender: "F", checkedIn: "10:45 AM", complaint: "Joint pain in both knees", waitMins: 48, status: "waiting", type: "Follow-up" },
-  { id: "6", token: 6, name: "Kiran Desai", age: 41, gender: "M", checkedIn: "11:00 AM", complaint: "Acidity and bloating", waitMins: 60, status: "waiting", type: "Routine" },
-  { id: "7", token: 7, name: "Asha Patel", age: 67, gender: "F", checkedIn: "11:15 AM", complaint: "Swelling in ankles", waitMins: 72, status: "waiting", type: "Follow-up" },
-  { id: "8", token: 8, name: "Dev Joshi", age: 19, gender: "M", checkedIn: "11:30 AM", complaint: "Runny nose and sneezing", waitMins: 84, status: "waiting", type: "New Patient" },
-  { id: "9", token: 9, name: "Pooja Iyer", age: 31, gender: "F", checkedIn: "11:45 AM", complaint: "Back pain for 2 weeks", waitMins: 96, status: "waiting", type: "Follow-up" },
-];
+import { createClient } from "@/lib/supabase/client";
 
 export default function DoctorQueuePage() {
   const router = useRouter();
-  const [queue, setQueue] = useState<QueueEntry[]>(initialQueue);
-
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
 
-  // Keep localStorage initialized and load it on client mount
-  useEffect(() => {
-    const stored = localStorage.getItem("doctor_queue_v2");
-    if (stored) {
-      setQueue(JSON.parse(stored));
-    } else {
-      localStorage.setItem("doctor_queue_v2", JSON.stringify(initialQueue));
+  const getDoctorId = () => {
+    const stored = localStorage.getItem("doctor_id");
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (stored && uuidRegex.test(stored)) {
+      return stored;
     }
-  }, []);
+    return "d1000000-0000-0000-0000-000000000001";
+  };
 
-  // Listen to active consultation ended / changed in layout
+  const loadQueue = async () => {
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+    const docId = getDoctorId();
+
+    const { data, error } = await (supabase
+      .from("queue_entries")
+      .select(`
+        id,
+        token_number,
+        status,
+        checked_in_at,
+        notes,
+        patients (
+          full_name,
+          date_of_birth,
+          gender
+        ),
+        appointments (
+          type,
+          chief_complaint
+        )
+      `)
+      .eq("doctor_id", docId)
+      .eq("queue_date", today)
+      .order("token_number") as any);
+
+    if (data && !error) {
+      const mapped: QueueEntry[] = data.map((item: any) => {
+        const birthDate = item.patients?.date_of_birth;
+        let age = 0;
+        if (birthDate) {
+          age = Math.floor((Date.now() - new Date(birthDate).getTime()) / 31536000000);
+        }
+        
+        let waitMins = 0;
+        if (item.checked_in_at) {
+          waitMins = Math.floor((Date.now() - new Date(item.checked_in_at).getTime()) / 60000);
+        }
+
+        const checkedInTime = item.checked_in_at
+          ? new Date(item.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : "09:00 AM";
+
+        return {
+          id: item.id,
+          token: item.token_number,
+          name: item.patients?.full_name ?? "Unknown",
+          age: age,
+          gender: item.patients?.gender === "male" ? "M" : item.patients?.gender === "female" ? "F" : "O",
+          checkedIn: checkedInTime,
+          complaint: item.appointments?.chief_complaint ?? item.notes ?? "No complaint",
+          waitMins: waitMins < 0 ? 0 : waitMins,
+          status: item.status,
+          type: item.appointments?.type === "consultation" ? "OPD" :
+                item.appointments?.type === "follow_up" ? "Follow-up" :
+                item.appointments?.type === "emergency" ? "Emergency" : "Routine"
+        };
+      });
+      setQueue(mapped);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const handleActiveChange = () => {
-      const stored = localStorage.getItem("doctor_queue_v2");
-      if (stored) {
-        setQueue(JSON.parse(stored));
-      }
-    };
-    window.addEventListener("active_consultation_changed", handleActiveChange);
-    window.addEventListener("storage", handleActiveChange);
+    loadQueue();
+    window.addEventListener("active_consultation_changed", loadQueue);
+    window.addEventListener("storage", loadQueue);
     return () => {
-      window.removeEventListener("active_consultation_changed", handleActiveChange);
-      window.removeEventListener("storage", handleActiveChange);
+      window.removeEventListener("active_consultation_changed", loadQueue);
+      window.removeEventListener("storage", loadQueue);
     };
   }, []);
 
-  const syncQueue = (updatedQueue: QueueEntry[]) => {
-    setQueue(updatedQueue);
-    localStorage.setItem("doctor_queue_v2", JSON.stringify(updatedQueue));
+  const callPatient = async (id: string) => {
+    const supabase = createClient();
 
-    // Update active consultation ID
-    const current = updatedQueue.find((e) => e.status === "in_progress");
-    if (current) {
-      localStorage.setItem("active_consultation_id", current.id);
-    } else {
-      localStorage.removeItem("active_consultation_id");
+    // 1. Mark any currently "in_progress" consultation as completed first
+    const currentActive = queue.find((e) => e.status === "in_progress");
+    if (currentActive && currentActive.id !== id) {
+      await (supabase
+        .from("queue_entries") as any)
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", currentActive.id);
     }
-    window.dispatchEvent(new Event("active_consultation_changed"));
-  };
-  const markDone = (id: string) => {
-    const updated = queue.map((e): QueueEntry => (e.id === id ? { ...e, status: "completed" as const } : e));
-    syncQueue(updated);
-  };
 
-  const callPatient = (id: string) => {
-    const updated = queue.map((e): QueueEntry => {
-      if (e.id === id) return { ...e, status: "in_progress" as const };
-      if (e.status === "in_progress") return { ...e, status: "completed" as const };
-      return e;
-    });
-    syncQueue(updated);
+    // 2. Set this consultation to "in_progress"
+    await (supabase
+      .from("queue_entries") as any)
+      .update({ status: "in_progress" })
+      .eq("id", id);
+
+    localStorage.setItem("active_consultation_id", id);
+    window.dispatchEvent(new Event("active_consultation_changed"));
     router.push("/doctor/prescription");
   };
 
-  const skipPatient = (id: string) => {
-    const updated = queue.map((e): QueueEntry => (e.id === id ? { ...e, status: "skipped" as const } : e));
-    syncQueue(updated);
+  const skipPatient = async (id: string) => {
+    const supabase = createClient();
+    await (supabase
+      .from("queue_entries") as any)
+      .update({ status: "skipped" })
+      .eq("id", id);
+
+    window.dispatchEvent(new Event("active_consultation_changed"));
   };
+
   const current = queue.find((e) => e.status === "in_progress");
   const completed = queue.filter((e) => e.status === "completed");
   const totalDone = completed.length;
@@ -124,6 +172,18 @@ export default function DoctorQueuePage() {
       </span>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center animate-pulse">
+          <div className="h-6 bg-neutral-100 rounded w-1/4" />
+          <div className="h-4 bg-neutral-100 rounded w-1/6" />
+        </div>
+        <Card className="p-8 text-center text-sm text-neutral-400 animate-pulse">Loading live queue...</Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

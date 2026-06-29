@@ -78,6 +78,21 @@ export const ReceptionistNavbar = () => {
   const displaySub = isNewPatient ? "Add New Patient" : (meta?.[1].breadcrumb ?? "");
   const unreadCount = notifications.filter((n) => n.unread).length;
 
+  const [recepName, setRecepName] = useState("Mary Joseph");
+
+  useEffect(() => {
+    const name = localStorage.getItem("receptionist_name");
+    if (name) setRecepName(name);
+  }, []);
+
+  const initials = recepName
+    ? recepName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "MJ";
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
@@ -159,9 +174,9 @@ export const ReceptionistNavbar = () => {
             onClick={() => { setShowUser((v) => !v); setShowNotif(false); }}
             className="flex items-center gap-2.5 hover:bg-neutral-50 rounded-lg px-2 py-1.5 transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">MJ</div>
+            <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
             <div className="text-left hidden sm:block">
-              <p className="text-xs font-semibold text-neutral-800 leading-tight">Mary Joseph</p>
+              <p className="text-xs font-semibold text-neutral-800 leading-tight">{recepName}</p>
               <p className="text-[10px] text-neutral-400 leading-tight">Front Desk</p>
             </div>
             <HugeiconsIcon icon={ChevronDownIcon} className="w-3.5 h-3.5 text-neutral-400" />
@@ -170,7 +185,7 @@ export const ReceptionistNavbar = () => {
           {showUser && (
             <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-neutral-200 rounded-xl z-50 overflow-hidden">
               <div className="px-4 py-3 border-b border-neutral-100">
-                <p className="text-sm font-semibold text-neutral-800">Mary Joseph</p>
+                <p className="text-sm font-semibold text-neutral-800">{recepName}</p>
                 <p className="text-xs text-neutral-500 mt-0.5">Front Desk Receptionist</p>
               </div>
               <div className="p-2">
