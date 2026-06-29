@@ -34,9 +34,9 @@ export const Tabs: React.FC<TabsProps> = ({
                 key={tab.id}
                 onClick={() => onChange(tab.id)}
                 className={`
-                  pb-3 pt-1 text-sm font-semibold tracking-tight transition-all duration-200 relative cursor-pointer focus:outline-none select-none flex items-center gap-2
-                  ${isActive 
-                    ? "text-primary-600 border-b-2 border-primary-600" 
+                  pb-3 pt-1 text-sm font-semibold tracking-tight transition-all duration-200 relative cursor-pointer focus:outline-none select-none flex items-center gap-2 rounded-none
+                  ${isActive
+                    ? "text-[#0B6E6E] border-b-2 border-[#0B6E6E]"
                     : "text-neutral-500 hover:text-neutral-800 border-b-2 border-transparent"}
                 `}
               >
@@ -58,8 +58,8 @@ export const Tabs: React.FC<TabsProps> = ({
                 onClick={() => onChange(tab.id)}
                 className={`
                   px-4 py-1.5 text-xs font-bold rounded-md tracking-tight transition-all duration-200 cursor-pointer focus:outline-none select-none flex items-center gap-1.5
-                  ${isActive 
-                    ? "bg-white text-neutral-900" 
+                  ${isActive
+                    ? "bg-white text-neutral-900"
                     : "text-neutral-500 hover:text-neutral-800"}
                 `}
               >

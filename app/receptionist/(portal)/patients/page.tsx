@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckInModal } from "@/components/app/check-in-modal";
+import { Drawer } from "@/components/ui/drawer";
 
 type Patient = {
   id: string;
@@ -340,84 +341,79 @@ export default function ReceptionistPatientsPage() {
 
       <CheckInModal isOpen={showCheckIn} onClose={() => { setShowCheckIn(false); loadPatients(); }} />
 
-      {/* Patient Detail Modal Pop-up */}
+      {/* Patient Detail Drawer */}
       {selectedDetailPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm">
-          <div className="w-full max-w-2xl bg-white rounded-2xl border border-neutral-200 overflow-hidden flex flex-col shadow-xl animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
-              <h2 className="text-lg font-bold text-neutral-800">Patient Profile details</h2>
-              <button onClick={() => setSelectedDetailPatient(null)} className="text-neutral-400 hover:text-neutral-600 transition-colors">
-                <HugeiconsIcon icon={Cancel01Icon} className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-primary-600 flex items-center justify-center text-white text-xl font-bold shrink-0">
-                  {getInitials(selectedDetailPatient.full_name)}
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-neutral-900 leading-snug">{selectedDetailPatient.full_name}</h3>
-                  <p className="text-sm text-neutral-400 mt-0.5">{selectedDetailPatient.patient_id}</p>
-                </div>
-              </div>
-
+        <Drawer
+          isOpen={!!selectedDetailPatient}
+          onClose={() => setSelectedDetailPatient(null)}
+          title={selectedDetailPatient.full_name}
+          subtitle={`${ageYears(selectedDetailPatient.date_of_birth) ?? "?"}y · ${selectedDetailPatient.gender ?? "—"} · ${selectedDetailPatient.patient_id}`}
+          showFooter={false}
+        >
+          <div className="flex flex-col h-full justify-between">
+            <div className="space-y-6">
               {/* Tabs */}
               <div className="flex border-b border-neutral-100">
                 <button
+                  type="button"
                   onClick={() => setDetailTab("info")}
-                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 ${detailTab === "info" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
-                    }`}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 cursor-pointer ${
+                    detailTab === "info"
+                      ? "border-[#0B6E6E] text-[#0B6E6E]"
+                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                  }`}
                 >
                   Info
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDetailTab("history")}
-                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 ${detailTab === "history" ? "border-primary-600 text-primary-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
-                    }`}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-all focus:outline-none focus:ring-0 cursor-pointer ${
+                    detailTab === "history"
+                      ? "border-[#0B6E6E] text-[#0B6E6E]"
+                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                  }`}
                 >
                   History ({selectedDetailPatient.appointments?.length ?? 0})
                 </button>
               </div>
 
               {detailTab === "info" && (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-2">
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Mobile Number</p>
-                    <p className="text-sm font-semibold text-neutral-855">{selectedDetailPatient.phone ?? "—"}</p>
+                    <p className="text-sm font-semibold text-neutral-800">{selectedDetailPatient.phone ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Email Address</p>
-                    <p className="text-sm font-semibold text-neutral-855 truncate">{selectedDetailPatient.email ?? "—"}</p>
+                    <p className="text-sm font-semibold text-neutral-800 truncate">{selectedDetailPatient.email ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Age &amp; Gender</p>
-                    <p className="text-sm font-semibold text-neutral-855">
-                      {ageYears(selectedDetailPatient.date_of_birth) ?? "?"} · {selectedDetailPatient.gender ?? "—"}
+                    <p className="text-sm font-semibold text-neutral-800">
+                      {ageYears(selectedDetailPatient.date_of_birth) ?? "?"}y · {selectedDetailPatient.gender ?? "—"}
                     </p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Blood Type</p>
-                    <p className="text-sm font-semibold text-neutral-855">{selectedDetailPatient.blood_group ?? "—"}</p>
+                    <p className="text-sm font-semibold text-neutral-800">{selectedDetailPatient.blood_group ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Assigned Doctor</p>
-                    <p className="text-sm font-semibold text-primary-700">{selectedDetailPatient.doctorName ?? "Unassigned"}</p>
+                    <p className="text-sm font-semibold text-[#0B6E6E]">{selectedDetailPatient.doctorName ?? "Unassigned"}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Last Visit</p>
-                    <p className="text-sm font-semibold text-neutral-855">{fmtDate(selectedDetailPatient.lastVisit)}</p>
+                    <p className="text-sm font-semibold text-neutral-800">{fmtDate(selectedDetailPatient.lastVisit)}</p>
                   </div>
                 </div>
               )}
 
               {detailTab === "history" && (
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
                   {selectedDetailPatient.appointments && selectedDetailPatient.appointments.length > 0 ? (
                     selectedDetailPatient.appointments.map((app, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs">
+                      <div key={idx} className="flex items-center justify-between p-3 bg-[#FBFCFD] rounded-xl border border-neutral-200/60 text-xs">
                         <div>
                           <p className="font-semibold text-neutral-800">{fmtDate(app.appointment_date)}</p>
                           <p className="text-neutral-500 mt-0.5">Doctor: {app.doctorName}</p>
@@ -426,7 +422,7 @@ export default function ReceptionistPatientsPage() {
                           <Badge variant={app.status === "completed" ? "success" : "neutral"} className="capitalize">
                             {app.status?.replace("_", " ") ?? "Unknown"}
                           </Badge>
-                          <p className="text-[10px] text-neutral-400 mt-1 capitalize">{app.type ?? "Consultation"}</p>
+                          <p className="text-[10px] text-neutral-450 mt-1 capitalize">{app.type ?? "Consultation"}</p>
                         </div>
                       </div>
                     ))
@@ -437,18 +433,18 @@ export default function ReceptionistPatientsPage() {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between rounded-b-2xl">
+            {/* Sticky Action Footer */}
+            <div className="mt-8 pt-4 border-t border-neutral-100 flex items-center justify-between">
               <Button
                 variant="ghost"
                 leftIcon={Delete01Icon}
-                className="text-error-600 hover:bg-error-50"
+                className="text-error-600 hover:bg-error-50 p-2"
                 onClick={() => {
                   setDeletingPatient(selectedDetailPatient);
                   setSelectedDetailPatient(null);
                 }}
               >
-                Delete Patient
+                Delete Profile
               </Button>
               <div className="flex items-center gap-2">
                 <Button variant="outline" leftIcon={PencilEdit01Icon} onClick={() => openEdit(selectedDetailPatient)}>
@@ -460,7 +456,7 @@ export default function ReceptionistPatientsPage() {
               </div>
             </div>
           </div>
-        </div>
+        </Drawer>
       )}
 
       {/* Delete Confirmation Modal */}

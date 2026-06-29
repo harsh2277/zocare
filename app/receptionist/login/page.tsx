@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 export default function ReceptionistLoginPage() {
   const router = useRouter();
@@ -10,6 +11,11 @@ export default function ReceptionistLoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ employeeId?: string; password?: string }>({});
+
+  // IT support states
+  const [showItModal, setShowItModal] = useState(false);
+  const [itForm, setItForm] = useState({ name: "Kavya Menon", issue: "Forgot Password", message: "" });
+  const today = new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +28,23 @@ export default function ReceptionistLoginPage() {
     await new Promise((r) => setTimeout(r, 1200));
     setLoading(false);
     router.push("/receptionist/dashboard");
+  };
+
+  const handleItSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const existing = JSON.parse(localStorage.getItem("it_support_requests") || "[]");
+    const newRequest = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: itForm.name,
+      date: today,
+      issue: itForm.issue,
+      message: itForm.message,
+      status: "Pending"
+    };
+    localStorage.setItem("it_support_requests", JSON.stringify([newRequest, ...existing]));
+    alert("Your IT Support request has been submitted to the Clinic Administrator!");
+    setShowItModal(false);
+    setItForm({ name: "Kavya Menon", issue: "Forgot Password", message: "" });
   };
 
   const clearError = (field: "employeeId" | "password") =>
@@ -60,11 +83,71 @@ export default function ReceptionistLoginPage() {
 
         <p className="text-sm text-neutral-500 text-center mt-6">
           Forgot Password?{" "}
-          <span className="text-primary-600 font-semibold cursor-pointer hover:underline">
+          <span 
+            className="text-[#0B6E6E] font-semibold cursor-pointer hover:underline"
+            onClick={() => setShowItModal(true)}
+          >
             Contact IT Support
           </span>
         </p>
       </div>
+
+      {/* IT Support Request Modal */}
+      {showItModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-neutral-200 p-6 space-y-6 shadow-2xl text-left">
+            <div>
+              <h3 className="font-extrabold text-xl text-neutral-900 tracking-tight">Contact IT Support</h3>
+              <p className="text-xs text-neutral-400 mt-1">Submit a password reset or account recovery ticket</p>
+            </div>
+            
+            <form onSubmit={handleItSubmit} className="space-y-4">
+              <Select
+                label="Select Name"
+                value={itForm.name}
+                onChange={(e) => setItForm((prev) => ({ ...prev, name: e.target.value }))}
+                options={[
+                  { value: "Kavya Menon", label: "Kavya Menon (Receptionist)" },
+                  { value: "Rohan Sharma", label: "Rohan Sharma (Receptionist)" },
+                  { value: "Divya Pillai", label: "Divya Pillai (Receptionist)" }
+                ]}
+              />
+
+              <Input
+                label="Date"
+                value={today}
+                disabled
+              />
+
+              <Select
+                label="Issue Category"
+                value={itForm.issue}
+                onChange={(e) => setItForm((prev) => ({ ...prev, issue: e.target.value }))}
+                options={[
+                  { value: "Forgot Password", label: "Forgot Password / Reset Link Request" },
+                  { value: "Account Locked", label: "Account Locked" },
+                  { value: "Software Issue", label: "Portal Software Glitch" },
+                  { value: "Other", label: "Other Support Request" }
+                ]}
+              />
+
+              <Input
+                label="Details / Message"
+                multiline
+                rows={3}
+                placeholder="Explain your problem briefly..."
+                value={itForm.message}
+                onChange={(e) => setItForm((prev) => ({ ...prev, message: (e.target as HTMLTextAreaElement).value }))}
+              />
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowItModal(false)}>Cancel</Button>
+                <Button type="submit" variant="primary" className="bg-[#0b6e6e] border-[#0b6e6e]">Submit Request</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

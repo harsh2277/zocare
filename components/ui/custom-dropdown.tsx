@@ -14,6 +14,7 @@ interface SearchDropdownProps {
   label?: string;
   placeholder?: string;
   options: DropdownOption[];
+  value?: string;
   onSelect?: (value: string) => void;
   error?: string;
 }
@@ -22,6 +23,7 @@ export const SearchDropdown: React.FC<SearchDropdownProps> = ({
   label,
   placeholder = "Select option...",
   options,
+  value,
   onSelect,
   error
 }) => {
@@ -29,6 +31,13 @@ export const SearchDropdown: React.FC<SearchDropdownProps> = ({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DropdownOption | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value !== undefined) {
+      const match = options.find((o) => o.value === value);
+      setSelected(match || null);
+    }
+  }, [value, options]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -134,6 +143,7 @@ interface ComboboxDropdownProps {
   label?: string;
   placeholder?: string;
   options: DropdownOption[];
+  value?: string;
   onSelect?: (value: string) => void;
   error?: string;
 }
@@ -142,12 +152,20 @@ export const ComboboxDropdown: React.FC<ComboboxDropdownProps> = ({
   label,
   placeholder = "Type to search...",
   options,
+  value,
   onSelect,
   error
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value !== undefined) {
+      const match = options.find((o) => o.value === value);
+      setInputValue(match ? match.label : value);
+    }
+  }, [value, options]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -185,6 +203,7 @@ export const ComboboxDropdown: React.FC<ComboboxDropdownProps> = ({
           onChange={(e) => {
             setInputValue(e.target.value);
             setIsOpen(true);
+            if (onSelect) onSelect(e.target.value);
           }}
           onFocus={() => setIsOpen(true)}
           className={`
@@ -195,7 +214,7 @@ export const ComboboxDropdown: React.FC<ComboboxDropdownProps> = ({
             ${error ? "border-error-500" : "border-neutral-200"}
           `}
         />
-        
+
         {/* Toggle Icon */}
         <button
           type="button"

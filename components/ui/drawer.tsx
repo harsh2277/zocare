@@ -13,6 +13,7 @@ export interface DrawerProps {
   subtitle?: string;
   confirmText?: string;
   cancelText?: string;
+  showFooter?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,6 +25,7 @@ export const Drawer: React.FC<DrawerProps> = ({
   subtitle = "Configure your preferences",
   confirmText = "Apply Changes",
   cancelText = "Close",
+  showFooter = true,
   children
 }) => {
   useEffect(() => {
@@ -42,12 +44,12 @@ export const Drawer: React.FC<DrawerProps> = ({
   const handleConfirm = onConfirm || onClose;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex justify-end bg-neutral-950/30 backdrop-blur-sm transition-opacity duration-300"
       onClick={onClose}
     >
-      <div 
-        className="w-full max-w-md bg-white border-l border-neutral-200/80 h-full flex flex-col justify-between transform transition-transform duration-300 ease-in-out animate-drawer-in rounded-l-[24px] overflow-hidden"
+      <div
+        className="w-full max-w-md bg-white border-l border-neutral-200/80 h-full flex flex-col justify-between transform transition-transform duration-300 ease-in-out animate-drawer-in  overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -75,14 +77,16 @@ export const Drawer: React.FC<DrawerProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-5 border-t border-neutral-100 bg-neutral-50/60 flex items-center gap-3">
-          <Button variant="outline" size="md" onClick={onClose} className="flex-1 font-bold">
-            {cancelText}
-          </Button>
-          <Button variant="primary" size="md" onClick={handleConfirm} className="flex-1 font-bold">
-            {confirmText}
-          </Button>
-        </div>
+        {showFooter && (
+          <div className="px-6 py-5 border-t border-neutral-100 bg-neutral-50/60 flex items-center gap-3">
+            <Button variant="outline" size="md" onClick={onClose} className="flex-1 font-bold">
+              {cancelText}
+            </Button>
+            <Button variant="primary" size="md" onClick={handleConfirm} className="flex-1 font-bold">
+              {confirmText}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

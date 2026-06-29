@@ -10,13 +10,21 @@ export interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  showFooter?: boolean;
+  onConfirm?: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
-  children
+  children,
+  showFooter = true,
+  onConfirm,
+  confirmText = "Confirm",
+  cancelText = "Cancel"
 }) => {
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -31,6 +39,8 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleConfirm = onConfirm || onClose;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-sm transition-opacity duration-300">
@@ -60,14 +70,16 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Stacked/Equal action buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <Button variant="outline" size="md" onClick={onClose} className="w-full">
-            Cancel
-          </Button>
-          <Button variant="primary" size="md" onClick={onClose} className="w-full">
-            Confirm
-          </Button>
-        </div>
+        {showFooter && (
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Button variant="outline" size="md" onClick={onClose} className="w-full">
+              {cancelText}
+            </Button>
+            <Button variant="primary" size="md" onClick={handleConfirm} className="w-full">
+              {confirmText}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
