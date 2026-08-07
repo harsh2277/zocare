@@ -36,11 +36,6 @@ export default function DoctorSettingsPage() {
     { key: "patientMessages",label: "Patient messages",         desc: "Notify when a patient sends a message" },
   ];
 
-  const sessions = [
-    { device: "Chrome on macOS", location: "Mumbai, India", time: "Active now" },
-    { device: "Safari on iPhone", location: "Mumbai, India", time: "2 hours ago" },
-  ];
-
   return (
     <div className="space-y-5">
       <PageHeader title="Settings" subtitle="Manage your clinic and account preferences" />
@@ -167,24 +162,6 @@ export default function DoctorSettingsPage() {
                   onChange={(e) => setPwForm((p) => ({ ...p, confirm: (e.target as HTMLInputElement).value }))}
                 />
                 <Button variant="primary" className="bg-[#0b6e6e] border-[#0b6e6e]">Update Password</Button>
-              </div>
-            </Card>
-
-            <Card padding="none">
-              <div className="px-5 py-4 border-b border-neutral-100">
-                <CardTitle>Active Sessions</CardTitle>
-                <p className="text-xs text-neutral-400 mt-0.5">Devices currently logged in to your account</p>
-              </div>
-              <div className="divide-y divide-neutral-100">
-                {sessions.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between px-5 py-3.5">
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-800">{s.device}</p>
-                      <p className="text-xs text-neutral-400 mt-0.5">{s.location}</p>
-                    </div>
-                    <span className="text-xs text-neutral-500 font-medium">{s.time}</span>
-                  </div>
-                ))}
               </div>
             </Card>
           </div>

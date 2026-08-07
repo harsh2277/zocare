@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/client";
 
 type ITRequest = {
   id: string;
@@ -16,48 +17,50 @@ type ITRequest = {
 
 export default function DoctorHelpPage() {
   const [requests, setRequests] = useState<ITRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadRequests = async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("it_support_requests")
+      .select("id, requester_name, issue_type, message, status, created_at")
+      .order("created_at", { ascending: false });
+
+    setRequests(((data as any[]) ?? []).map((r) => ({
+      id: r.id,
+      name: r.requester_name,
+      date: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+      issue: r.issue_type,
+      message: r.message ?? "",
+      status: r.status === "resolved" ? "Resolved" : "Pending",
+    })));
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const loaded = JSON.parse(localStorage.getItem("it_support_requests") || "[]");
-    if (loaded.length === 0) {
-      const mockReqs: ITRequest[] = [
-        {
-          id: "req1",
-          name: "Kavya Menon",
-          date: "29 Jun 2026",
-          issue: "Forgot Password",
-          message: "Forgot my password. Please reset.",
-          status: "Pending",
-        },
-        {
-          id: "req2",
-          name: "Rohan Sharma",
-          date: "28 Jun 2026",
-          issue: "Account Locked",
-          message: "Locked out after 3 failed attempts.",
-          status: "Resolved",
-        },
-      ];
-      localStorage.setItem("it_support_requests", JSON.stringify(mockReqs));
-      setRequests(mockReqs);
-    } else {
-      setRequests(loaded);
-    }
+    loadRequests();
   }, []);
 
-  const handleResolve = (id: string) => {
-    const updated = requests.map((r) =>
-      r.id === id ? { ...r, status: "Resolved" } : r
-    );
-    setRequests(updated);
-    localStorage.setItem("it_support_requests", JSON.stringify(updated));
+  const handleResolve = async (id: string) => {
+    const supabase = createClient();
+    await (supabase.from("it_support_requests") as any).update({ status: "resolved" }).eq("id", id);
+    loadRequests();
   };
 
-  const handleDelete = (id: string) => {
-    const updated = requests.filter((r) => r.id !== id);
-    setRequests(updated);
-    localStorage.setItem("it_support_requests", JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    const supabase = createClient();
+    await (supabase.from("it_support_requests") as any).delete().eq("id", id);
+    loadRequests();
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="IT Support Requests" subtitle="Manage receptionist password and access requests" />
+        <Card className="p-8 text-center text-sm text-neutral-400 animate-pulse">Loading support requests...</Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

@@ -330,31 +330,96 @@ create index if not exists invoice_items_invoice_id_idx on public.billing_invoic
 
 
 -- ----------------------------------------------------------------------------
--- Row Level Security (RLS)
--- ⚠️  DEV-ONLY permissive policies — replace before production
+-- users (unified user table for doctors, receptionists, patients, admins)
 -- ----------------------------------------------------------------------------
-alter table public.patients          enable row level security;
-alter table public.appointments      enable row level security;
-alter table public.queue_entries     enable row level security;
-alter table public.prescriptions     enable row level security;
-alter table public.prescription_items enable row level security;
-alter table public.billing_invoices  enable row level security;
+create table if not exists public.users (
+  id              uuid primary key default gen_random_uuid(),
+  auth_user_id    uuid references auth.users (id) on delete set null,
+  full_name       text not null,
+  email           text unique not null,
+  phone           text,
+  role            text not null check (role in ('doctor', 'receptionist', 'patient', 'admin')),
+  specialization  text,
+  registration_no text,
+  avatar_url      text,
+  is_active       boolean not null default true,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists users_auth_user_id_idx on public.users (auth_user_id);
+create index if not exists users_role_idx on public.users (role);
+
+drop trigger if exists users_set_updated_at on public.users;
+create trigger users_set_updated_at
+  before update on public.users
+  for each row execute function public.set_updated_at();
+
+
+-- ----------------------------------------------------------------------------
+-- it_support_requests
+-- Password reset / access tickets. Submitted from both the (authenticated)
+-- doctor help page and the (pre-login) receptionist login screen, so anon
+-- needs insert access — everything else stays authenticated-only.
+-- ----------------------------------------------------------------------------
+create table if not exists public.it_support_requests (
+  id              uuid primary key default gen_random_uuid(),
+  requester_name  text not null,
+  requester_role  text not null default 'receptionist'
+                    check (requester_role in ('doctor', 'receptionist')),
+  issue_type      text not null,
+  message         text,
+  status          text not null default 'pending'
+                    check (status in ('pending', 'resolved')),
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists it_support_requests_status_idx on public.it_support_requests (status);
+
+
+-- ----------------------------------------------------------------------------
+-- Row Level Security (RLS)
+-- Every table is readable/writable only by a signed-in (authenticated) user.
+-- Anonymous visitors get nothing, so the login screen is the real gate.
+-- ⚠️  Still coarse — tighten per-role before production.
+-- ----------------------------------------------------------------------------
+alter table public.users              enable row level security;
+alter table public.doctors            enable row level security;
+alter table public.receptionists       enable row level security;
+alter table public.patients            enable row level security;
+alter table public.appointments        enable row level security;
+alter table public.queue_entries       enable row level security;
+alter table public.prescriptions       enable row level security;
+alter table public.prescription_items  enable row level security;
+alter table public.billing_invoices    enable row level security;
 alter table public.billing_invoice_items enable row level security;
+alter table public.it_support_requests enable row level security;
 
 do $$
 declare
   tbl text;
 begin
   foreach tbl in array array[
-    'doctors', 'receptionists', 'patients', 'appointments',
+    'users', 'doctors', 'receptionists', 'patients', 'appointments',
     'queue_entries', 'prescriptions', 'prescription_items',
     'billing_invoices', 'billing_invoice_items'
   ] loop
     execute format('
       drop policy if exists "dev: %1$s full access" on public.%1$s;
-      create policy "dev: %1$s full access"
-        on public.%1$s for all using (true) with check (true);
+      drop policy if exists "authenticated: %1$s full access" on public.%1$s;
+      create policy "authenticated: %1$s full access"
+        on public.%1$s for all to authenticated using (true) with check (true);
     ', tbl);
   end loop;
 end;
 $$;
+
+-- it_support_requests: anon can only file a ticket (pre-login); reading,
+-- resolving, and deleting stays authenticated-only.
+drop policy if exists "anon: it_support_requests insert" on public.it_support_requests;
+create policy "anon: it_support_requests insert"
+  on public.it_support_requests for insert to anon with check (true);
+
+drop policy if exists "authenticated: it_support_requests full access" on public.it_support_requests;
+create policy "authenticated: it_support_requests full access"
+  on public.it_support_requests for all to authenticated using (true) with check (true);

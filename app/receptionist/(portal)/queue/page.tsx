@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Clock01Icon, StethoscopeIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { createClient } from "@/lib/supabase/client";
@@ -184,9 +183,6 @@ export default function ReceptionistQueuePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-neutral-900">Live Queue Management</h1>
         <div className="flex items-center gap-2">
-          <Link href="/receptionist/patients/new">
-            <Button variant="outline" size="md" leftIcon={PlusSignIcon}>Add Patient</Button>
-          </Link>
           <Button variant="primary" size="md" leftIcon={PlusSignIcon} onClick={() => setShowCheckIn(true)}>
             Check In
           </Button>

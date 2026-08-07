@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# zocare — OPD clinic portal
+
+Next.js 16 App Router + Supabase (serverless Postgres + Supabase Auth).
+Two portals: `/doctor/*` and `/receptionist/*`.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). `/` redirects to the reception login.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Demo accounts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+These are the only two accounts in the system:
 
-## Learn More
+| Portal       | Email              | Password    |
+| ------------ | ------------------ | ----------- |
+| Doctor       | `doctor@gmail.com` | `doctor123` |
+| Receptionist | `harsh@gmail.com`  | `harsh123`  |
 
-To learn more about Next.js, take a look at the following resources:
+Google sign-in is stubbed as *Coming soon* on both login screens.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Supabase is serverless Postgres — nothing to host. In the Supabase Dashboard →
+**SQL Editor** → New query, run these in order (both are safe to re-run):
 
-## Deploy on Vercel
+1. `supabase/schema.sql` — tables, indexes, `updated_at` triggers, auto-generated
+   `patient_id` / `prescription_no` / `invoice_no`, and RLS policies that only
+   let signed-in users read or write.
+2. `supabase/seed.sql` — the two staff accounts plus demo patients,
+   appointments, today's queue, prescriptions and invoices.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The two Supabase Auth users already exist in this project. To (re)create them —
+for a fresh project, or to reset the passwords:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+node --env-file=.env.local scripts/create-auth-users.mjs
+```
+
+It prints the auth UUIDs; paste them into the `auth_user_id` columns at the top
+of `supabase/seed.sql` and re-run that file.
+
+## How auth works
+
+- `lib/auth.ts` — `signIn` / `signOut` / `getCurrentStaff`. Sign-in goes through
+  Supabase Auth (`signInWithPassword`), then resolves the matching `doctors` or
+  `receptionists` row via `auth_user_id`.
+- `proxy.ts` (Next 16 renamed Middleware to Proxy) refreshes the session cookie
+  on every request, bounces signed-out visitors to the right login page, and
+  keeps each role inside its own portal.
+- `lib/supabase/client.ts` (browser), `server.ts` (Server Components/Actions),
+  `admin.ts` (secret key, server-only).
+
+## Environment
+
+`.env.local` holds the Supabase URL, publishable key and secret key. The secret
+key is server-only — never import `lib/supabase/admin.ts` from a client
+component.

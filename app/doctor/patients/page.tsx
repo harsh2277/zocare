@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useEffect } from "react";
 
 type Visit = { date: string; reason: string; diagnosis: string; doctor: string };
-type RxRecord = { date: string; drugs: string[]; status: "active" | "completed" };
+type RxRecord = { id: string; date: string; drugs: string[]; status: "active" | "completed" };
 type Bill = { invoiceNo: string; date: string; service: string; amount: number; paid: number; status: "paid" | "partial" | "issued" };
 
 type Patient = {
@@ -26,6 +26,7 @@ type Patient = {
   diagnosis: string; lastVisit: string; nextAppt: string; status: string;
   allergies: string; medications: string[]; notes: string;
   visits: Visit[]; prescriptions: RxRecord[]; bills: Bill[];
+  createdAt: string | null;
 };
 
 const statusBadge: Record<string, "success" | "info" | "neutral"> = {
@@ -60,9 +61,10 @@ export default function DoctorPatientsPage() {
       const { data, error } = await (supabase
         .from("patients")
         .select(`
-          id, patient_id, full_name, date_of_birth, gender, phone, address, blood_group, allergies, notes,
+          id, patient_id, full_name, date_of_birth, gender, phone, address, blood_group, allergies, notes, created_at,
           appointments(id, type, appointment_date, status, chief_complaint, doctors(full_name)),
-          prescriptions(id, prescription_no, created_at, status, prescription_items(medicine_name))
+          prescriptions(id, prescription_no, created_at, status, prescription_items(medicine_name)),
+          billing_invoices(id, invoice_no, created_at, total, paid_amount, status, billing_invoice_items(description))
         `) as any);
 
       if (data && !error) {
@@ -77,10 +79,11 @@ export default function DoctorPatientsPage() {
             date: appt.appointment_date ? new Date(appt.appointment_date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
             reason: appt.chief_complaint ?? appt.type ?? "OPD Review",
             diagnosis: appt.chief_complaint ?? "OPD Review",
-            doctor: appt.doctors?.full_name ?? "Dr. Sarah Ahmed"
+            doctor: appt.doctors?.full_name ?? "—"
           }));
 
           const prescriptions = (p.prescriptions ?? []).map((rx: any) => ({
+            id: rx.id,
             date: rx.created_at ? new Date(rx.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
             drugs: (rx.prescription_items ?? []).map((item: any) => item.medicine_name),
             status: rx.status === "active" ? "active" : "completed"
@@ -88,6 +91,26 @@ export default function DoctorPatientsPage() {
 
           const hasActiveAppt = (p.appointments ?? []).some((appt: any) => appt.status !== "completed");
           const status = hasActiveAppt ? "active" : "discharged";
+
+          const now = Date.now();
+          const upcoming = (p.appointments ?? [])
+            .filter((appt: any) => appt.appointment_date && new Date(appt.appointment_date).getTime() >= now && appt.status !== "completed" && appt.status !== "cancelled")
+            .sort((a: any, b: any) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
+          const nextAppt = upcoming[0]
+            ? new Date(upcoming[0].appointment_date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
+            : "Not scheduled";
+
+          const bills = (p.billing_invoices ?? [])
+            .slice()
+            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .map((inv: any) => ({
+              invoiceNo: inv.invoice_no,
+              date: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+              service: (inv.billing_invoice_items ?? []).map((i: any) => i.description).join(", ") || "Consultation",
+              amount: Number(inv.total) || 0,
+              paid: Number(inv.paid_amount) || 0,
+              status: inv.status === "paid" ? "paid" : inv.status === "partial" ? "partial" : "issued",
+            }));
 
           return {
             id: p.id,
@@ -100,14 +123,15 @@ export default function DoctorPatientsPage() {
             bloodType: p.blood_group ?? "—",
             diagnosis: p.notes ?? "Regular Checkup",
             lastVisit: visits[0]?.date ?? "—",
-            nextAppt: "Not scheduled",
+            nextAppt: nextAppt,
             status: status,
             allergies: p.allergies ?? "None",
             medications: prescriptions[0]?.drugs ?? [],
             notes: p.notes ?? "",
             visits: visits,
             prescriptions: prescriptions,
-            bills: []
+            bills: bills,
+            createdAt: p.created_at,
           };
         });
         setPatients(mapped);
@@ -145,11 +169,20 @@ export default function DoctorPatientsPage() {
     );
   }
 
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const newThisMonth = patients.filter((p) => p.createdAt && new Date(p.createdAt) >= startOfThisMonth).length;
+  const newLastMonth = patients.filter((p) => p.createdAt && new Date(p.createdAt) >= startOfLastMonth && new Date(p.createdAt) < startOfThisMonth).length;
+  const monthChangeSubtitle = newLastMonth === 0
+    ? (newThisMonth > 0 ? "New since last month" : "No change from last month")
+    : `${newThisMonth >= newLastMonth ? "+" : ""}${Math.round(((newThisMonth - newLastMonth) / newLastMonth) * 100)}% from last month`;
+
   const statCards = [
     { title: "Total Patients", value: String(patients.length), icon: UserGroupIcon, subtitle: "Registered patients", subtitleColor: "text-neutral-500" },
     { title: "Active Patients", value: String(patients.filter(p=>p.status==="active").length), icon: CheckmarkCircle01Icon, subtitle: "Under active care", subtitleColor: "text-emerald-600" },
     { title: "Follow-up Due", value: String(patients.filter(p=>p.status==="follow_up").length), icon: AlertCircleIcon, subtitle: "Require review", subtitleColor: "text-amber-600" },
-    { title: "New This Month", value: "12", icon: PlusSignIcon, subtitle: "+15% from last month", subtitleColor: "text-blue-600" },
+    { title: "New This Month", value: String(newThisMonth), icon: PlusSignIcon, subtitle: monthChangeSubtitle, subtitleColor: "text-blue-600" },
   ];
 
   return (
@@ -361,11 +394,14 @@ export default function DoctorPatientsPage() {
                     <span className="text-xs text-neutral-400">{rx.date}</span>
                     <Badge variant={rx.status === "active" ? "success" : "neutral"}>{rx.status === "active" ? "Active" : "Completed"}</Badge>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
                     {rx.drugs.map((d, j) => (
                       <span key={j} className="text-xs bg-primary-50 text-primary-700 rounded-md px-2 py-1">{d}</span>
                     ))}
                   </div>
+                  <Button size="sm" variant="outline" onClick={() => router.push(`/doctor/prescription/${rx.id}`)}>
+                    View Prescription
+                  </Button>
                 </div>
               ))}
             </div>

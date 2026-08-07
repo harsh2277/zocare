@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -8,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PlusSignIcon, Delete01Icon, PrinterIcon, ArrowLeft02Icon, UserIcon, PrescriptionIcon } from "@hugeicons/core-free-icons";
+import { createClient } from "@/lib/supabase/client";
 
 interface Medication {
   id: string;
@@ -17,20 +19,30 @@ interface Medication {
   duration: string;
   route: string;
   instructions: string;
+  isNew?: boolean;
 }
 
-interface Prescription {
+interface PrescriptionForm {
   chiefComplaint: string;
   diagnosis: string;
-  bp: string;
-  temperature: string;
-  pulse: string;
-  spo2: string;
-  medications: Medication[];
-  generalInstructions: string;
+  notes: string;
   followUpDate: string;
-  advice: string;
 }
+
+type PatientInfo = {
+  full_name: string;
+  patient_id: string;
+  gender: string | null;
+  date_of_birth: string | null;
+  blood_group: string | null;
+  allergies: string | null;
+  phone: string | null;
+};
+
+type DoctorInfo = {
+  full_name: string;
+  specialization: string | null;
+};
 
 const frequencyOptions = [
   { value: "once_daily", label: "Once daily" },
@@ -48,99 +60,215 @@ const routeOptions = [
 ];
 
 export default function PrescriptionDetailPage() {
-  const [prescription, setPrescription] = useState<Prescription>({
-    chiefComplaint: "Patient presents with fever, sore throat, and mild body aches for 3 days.",
-    diagnosis: "Acute pharyngitis, likely viral in origin.",
-    bp: "118/76",
-    temperature: "99.8°F",
-    pulse: "82",
-    spo2: "98%",
-    medications: [
-      {
-        id: "med-1",
-        name: "Paracetamol",
-        dosage: "500mg",
-        frequency: "three_times_daily",
-        duration: "5 days",
-        route: "oral",
-        instructions: "Take after meals",
-      },
-      {
-        id: "med-2",
-        name: "Cetirizine",
-        dosage: "10mg",
-        frequency: "once_daily",
-        duration: "7 days",
-        route: "oral",
-        instructions: "Take at bedtime",
-      },
-    ],
-    generalInstructions: "Rest adequately. Drink plenty of fluids. Avoid cold beverages and spicy food.",
-    followUpDate: "2026-07-02",
-    advice: "Return immediately if symptoms worsen or fever exceeds 103°F.",
+  const params = useParams();
+  const router = useRouter();
+  const id = params?.id as string;
+
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [prescriptionNo, setPrescriptionNo] = useState("");
+  const [prescriptionDate, setPrescriptionDate] = useState("");
+  const [status, setStatus] = useState<string>("active");
+  const [patient, setPatient] = useState<PatientInfo | null>(null);
+  const [doctor, setDoctor] = useState<DoctorInfo | null>(null);
+
+  const [form, setForm] = useState<PrescriptionForm>({
+    chiefComplaint: "",
+    diagnosis: "",
+    notes: "",
+    followUpDate: "",
   });
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [deletedMedIds, setDeletedMedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  const [status, setStatus] = useState<"Draft" | "Saved" | "Printed">("Draft");
+  useEffect(() => {
+    const load = async () => {
+      if (!id) return;
+      const supabase = createClient();
 
-  const updateField = (field: keyof Prescription, value: string) => {
-    setPrescription((prev) => ({ ...prev, [field]: value }));
+      const { data: rx, error: rxErr } = await supabase
+        .from("prescriptions")
+        .select("*, patients(full_name, patient_id, gender, date_of_birth, blood_group, allergies, phone), doctors(full_name, specialization)")
+        .eq("id", id)
+        .single();
+
+      if (rxErr || !rx) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      setPrescriptionNo((rx as any).prescription_no ?? "");
+      setPrescriptionDate((rx as any).created_at ?? "");
+      setStatus((rx as any).status ?? "active");
+      setPatient((rx as any).patients ?? null);
+      setDoctor((rx as any).doctors ?? null);
+      setForm({
+        chiefComplaint: (rx as any).chief_complaint ?? "",
+        diagnosis: (rx as any).diagnosis ?? "",
+        notes: (rx as any).notes ?? "",
+        followUpDate: (rx as any).follow_up_date ?? "",
+      });
+
+      const { data: items, error: itemsErr } = await supabase
+        .from("prescription_items")
+        .select("*")
+        .eq("prescription_id", id)
+        .order("sort_order");
+
+      if (!itemsErr && items) {
+        setMedications(
+          items.map((item: any) => ({
+            id: item.id,
+            name: item.medicine_name,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            duration: item.duration,
+            route: item.route ?? "oral",
+            instructions: item.instructions ?? "",
+          }))
+        );
+      }
+
+      setLoading(false);
+    };
+    load();
+  }, [id]);
+
+  const updateField = (field: keyof PrescriptionForm, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateMedication = (id: string, field: keyof Medication, value: string) => {
-    setPrescription((prev) => ({
-      ...prev,
-      medications: prev.medications.map((med) =>
-        med.id === id ? { ...med, [field]: value } : med
-      ),
-    }));
+  const updateMedication = (medId: string, field: keyof Medication, value: string) => {
+    setMedications((prev) =>
+      prev.map((med) => (med.id === medId ? { ...med, [field]: value } : med))
+    );
   };
 
   const addMedication = () => {
     const newMed: Medication = {
-      id: `med-${Date.now()}`,
+      id: `new-${Date.now()}`,
       name: "",
       dosage: "",
       frequency: "once_daily",
       duration: "",
       route: "oral",
       instructions: "",
+      isNew: true,
     };
-    setPrescription((prev) => ({
-      ...prev,
-      medications: [...prev.medications, newMed],
-    }));
+    setMedications((prev) => [...prev, newMed]);
   };
 
-  const removeMedication = (id: string) => {
-    setPrescription((prev) => ({
-      ...prev,
-      medications: prev.medications.filter((med) => med.id !== id),
-    }));
+  const removeMedication = (medId: string) => {
+    setMedications((prev) => prev.filter((med) => med.id !== medId));
+    if (!medId.startsWith("new-")) {
+      setDeletedMedIds((prev) => [...prev, medId]);
+    }
   };
 
-  const handleSaveDraft = () => {
-    setStatus("Draft");
+  const handleSave = async (print: boolean) => {
+    if (!id) return;
+    setSaving(true);
+    const supabase = createClient();
+
+    const { error: updateErr } = await (supabase
+      .from("prescriptions") as any)
+      .update({
+        chief_complaint: form.chiefComplaint,
+        diagnosis: form.diagnosis,
+        notes: form.notes,
+        follow_up_date: form.followUpDate || null,
+      })
+      .eq("id", id);
+
+    if (updateErr) {
+      alert("Error saving prescription: " + updateErr.message);
+      setSaving(false);
+      return;
+    }
+
+    if (deletedMedIds.length > 0) {
+      await supabase.from("prescription_items").delete().in("id", deletedMedIds);
+      setDeletedMedIds([]);
+    }
+
+    const newMeds = medications.filter((m) => m.isNew);
+    const existingMeds = medications.filter((m) => !m.isNew);
+
+    if (newMeds.length > 0) {
+      await (supabase.from("prescription_items") as any).insert(
+        newMeds.map((m, idx) => ({
+          prescription_id: id,
+          medicine_name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+          route: m.route as any,
+          instructions: m.instructions,
+          sort_order: existingMeds.length + idx,
+        }))
+      );
+    }
+
+    for (const m of existingMeds) {
+      await (supabase
+        .from("prescription_items") as any)
+        .update({
+          medicine_name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+          route: m.route as any,
+          instructions: m.instructions,
+        })
+        .eq("id", m.id);
+    }
+
+    setSaving(false);
+    if (print) {
+      window.print();
+    }
   };
 
-  const handleSavePrint = () => {
-    setStatus("Printed");
-  };
+  if (loading) {
+    return <div className="p-8 text-center text-sm text-neutral-400">Loading prescription...</div>;
+  }
+
+  if (notFound || !patient) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4">
+        <Card className="p-8 text-center max-w-md">
+          <h2 className="text-lg font-bold text-neutral-800 mb-2">Prescription Not Found</h2>
+          <p className="text-sm text-neutral-500 mb-4">
+            We couldn't find a prescription with this ID. It may have been deleted or the link is invalid.
+          </p>
+          <Button variant="primary" onClick={() => router.push("/doctor/patients")}>Back to Patients</Button>
+        </Card>
+      </div>
+    );
+  }
+
+  let age: number | null = null;
+  if (patient.date_of_birth) {
+    age = Math.floor((Date.now() - new Date(patient.date_of_birth).getTime()) / 31536000000);
+  }
 
   return (
     <div className="space-y-5">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" leftIcon={ArrowLeft02Icon}>
+          <Button variant="ghost" size="sm" leftIcon={ArrowLeft02Icon} onClick={() => router.back()}>
             Back
           </Button>
           <div>
-            <h1 className="text-lg font-semibold text-neutral-900">Write Prescription</h1>
-            <p className="text-xs text-neutral-500">Complete the prescription details below</p>
+            <h1 className="text-lg font-semibold text-neutral-900">Prescription {prescriptionNo}</h1>
+            <p className="text-xs text-neutral-500">Review and edit prescription details</p>
           </div>
         </div>
-        <Badge variant={status === "Draft" ? "warning" : status === "Printed" ? "success" : "neutral"}>
-          {status}
+        <Badge variant={status === "active" ? "success" : status === "cancelled" ? "neutral" : "warning"}>
+          {status.charAt(0).toUpperCase() + status.slice(1)}
         </Badge>
       </div>
 
@@ -156,24 +284,27 @@ export default function PrescriptionDetailPage() {
           </CardHeader>
           <div className="px-5 pb-5">
             <div className="flex items-start gap-4">
-              <Avatar size="lg" fallback="RM" />
+              <Avatar size="lg" fallback={patient.full_name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "PT"} />
               <div className="flex-1 space-y-3">
                 <div>
-                  <p className="text-base font-semibold text-neutral-900">Rahul Mehta</p>
-                  <p className="text-xs text-neutral-500">Male, 28 years • ID: ZC-0042</p>
+                  <p className="text-base font-semibold text-neutral-900">{patient.full_name}</p>
+                  <p className="text-xs text-neutral-500">
+                    {patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : "—"}
+                    {age !== null ? `, ${age} years` : ""} • ID: {patient.patient_id}
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Blood Group</p>
-                    <p className="text-sm text-neutral-900 font-medium mt-0.5">O+</p>
+                    <p className="text-sm text-neutral-900 font-medium mt-0.5">{patient.blood_group ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Allergies</p>
-                    <p className="text-sm text-error-600 font-medium mt-0.5">Penicillin</p>
+                    <p className="text-sm text-error-600 font-medium mt-0.5">{patient.allergies ?? "None"}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Contact</p>
-                    <p className="text-sm text-neutral-900 font-medium mt-0.5">+91 98765 43210</p>
+                    <p className="text-sm text-neutral-900 font-medium mt-0.5">{patient.phone ?? "—"}</p>
                   </div>
                 </div>
               </div>
@@ -193,25 +324,21 @@ export default function PrescriptionDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Rx No.</p>
-                <p className="text-sm text-neutral-900 font-medium mt-0.5">RX-2026-00847</p>
+                <p className="text-sm text-neutral-900 font-medium mt-0.5">{prescriptionNo}</p>
               </div>
               <div>
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Date</p>
-                <p className="text-sm text-neutral-900 font-medium mt-0.5">June 25, 2026</p>
+                <p className="text-sm text-neutral-900 font-medium mt-0.5">
+                  {prescriptionDate ? new Date(prescriptionDate).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" }) : "—"}
+                </p>
               </div>
               <div>
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Doctor</p>
-                <p className="text-sm text-neutral-900 font-medium mt-0.5">Dr. Anita Sharma</p>
+                <p className="text-sm text-neutral-900 font-medium mt-0.5">{doctor?.full_name ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Qualification</p>
-                <p className="text-sm text-neutral-900 font-medium mt-0.5">MBBS, MD</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Status</p>
-                <div className="mt-1">
-                  <Badge variant="warning">Draft</Badge>
-                </div>
+                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wide">Specialization</p>
+                <p className="text-sm text-neutral-900 font-medium mt-0.5">{doctor?.specialization ?? "—"}</p>
               </div>
             </div>
           </div>
@@ -229,7 +356,7 @@ export default function PrescriptionDetailPage() {
               label="Chief Complaint"
               multiline
               rows={3}
-              value={prescription.chiefComplaint}
+              value={form.chiefComplaint}
               onChange={(e) => updateField("chiefComplaint", (e.target as HTMLTextAreaElement).value)}
               placeholder="Describe the patient's chief complaint..."
             />
@@ -237,41 +364,10 @@ export default function PrescriptionDetailPage() {
               label="Diagnosis"
               multiline
               rows={3}
-              value={prescription.diagnosis}
+              value={form.diagnosis}
               onChange={(e) => updateField("diagnosis", (e.target as HTMLTextAreaElement).value)}
               placeholder="Enter diagnosis..."
             />
-          </div>
-
-          {/* Vitals Row */}
-          <div>
-            <p className="text-xs font-bold text-neutral-600 uppercase tracking-wide mb-3">Vitals</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Input
-                label="Blood Pressure"
-                value={prescription.bp}
-                onChange={(e) => updateField("bp", e.target.value)}
-                placeholder="e.g. 120/80"
-              />
-              <Input
-                label="Temperature"
-                value={prescription.temperature}
-                onChange={(e) => updateField("temperature", e.target.value)}
-                placeholder="e.g. 98.6°F"
-              />
-              <Input
-                label="Pulse (bpm)"
-                value={prescription.pulse}
-                onChange={(e) => updateField("pulse", e.target.value)}
-                placeholder="e.g. 72"
-              />
-              <Input
-                label="SpO2 (%)"
-                value={prescription.spo2}
-                onChange={(e) => updateField("spo2", e.target.value)}
-                placeholder="e.g. 98%"
-              />
-            </div>
           </div>
         </div>
       </Card>
@@ -287,7 +383,10 @@ export default function PrescriptionDetailPage() {
           </div>
         </CardHeader>
         <div className="px-5 pb-5 space-y-4">
-          {prescription.medications.map((med, index) => (
+          {medications.length === 0 && (
+            <p className="text-sm text-neutral-400 text-center py-4">No medications added yet.</p>
+          )}
+          {medications.map((med, index) => (
             <div
               key={med.id}
               className="border border-neutral-200 rounded-xl p-4 space-y-3 bg-neutral-50/50"
@@ -310,20 +409,20 @@ export default function PrescriptionDetailPage() {
                   <Input
                     label="Medicine Name"
                     value={med.name}
-                    onChange={(e) => updateMedication(med.id, "name", e.target.value)}
+                    onChange={(e) => updateMedication(med.id, "name", (e.target as HTMLInputElement).value)}
                     placeholder="e.g. Amoxicillin"
                   />
                 </div>
                 <Input
                   label="Dosage"
                   value={med.dosage}
-                  onChange={(e) => updateMedication(med.id, "dosage", e.target.value)}
+                  onChange={(e) => updateMedication(med.id, "dosage", (e.target as HTMLInputElement).value)}
                   placeholder="e.g. 500mg"
                 />
                 <Input
                   label="Duration"
                   value={med.duration}
-                  onChange={(e) => updateMedication(med.id, "duration", e.target.value)}
+                  onChange={(e) => updateMedication(med.id, "duration", (e.target as HTMLInputElement).value)}
                   placeholder="e.g. 7 days"
                 />
               </div>
@@ -332,19 +431,19 @@ export default function PrescriptionDetailPage() {
                 <Select
                   label="Frequency"
                   value={med.frequency}
-                  onChange={(e) => updateMedication(med.id, "frequency", e.target.value)}
+                  onChange={(e) => updateMedication(med.id, "frequency", (e.target as HTMLSelectElement).value)}
                   options={frequencyOptions}
                 />
                 <Select
                   label="Route"
                   value={med.route}
-                  onChange={(e) => updateMedication(med.id, "route", e.target.value)}
+                  onChange={(e) => updateMedication(med.id, "route", (e.target as HTMLSelectElement).value)}
                   options={routeOptions}
                 />
                 <Input
                   label="Instructions"
                   value={med.instructions}
-                  onChange={(e) => updateMedication(med.id, "instructions", e.target.value)}
+                  onChange={(e) => updateMedication(med.id, "instructions", (e.target as HTMLInputElement).value)}
                   placeholder="e.g. Take after meals"
                 />
               </div>
@@ -363,30 +462,20 @@ export default function PrescriptionDetailPage() {
           <CardTitle className="text-sm font-semibold text-neutral-700">Instructions & Follow-up</CardTitle>
         </CardHeader>
         <div className="px-5 pb-5 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Input
-              label="General Instructions"
-              multiline
-              rows={3}
-              value={prescription.generalInstructions}
-              onChange={(e) => updateField("generalInstructions", (e.target as HTMLTextAreaElement).value)}
-              placeholder="General care instructions for the patient..."
-            />
-            <Input
-              label="Advice"
-              multiline
-              rows={3}
-              value={prescription.advice}
-              onChange={(e) => updateField("advice", (e.target as HTMLTextAreaElement).value)}
-              placeholder="Additional advice or warnings..."
-            />
-          </div>
+          <Input
+            label="Notes / Advice"
+            multiline
+            rows={3}
+            value={form.notes}
+            onChange={(e) => updateField("notes", (e.target as HTMLTextAreaElement).value)}
+            placeholder="Additional advice or notes..."
+          />
           <div className="max-w-xs">
             <Input
               label="Follow-up Date"
               type="date"
-              value={prescription.followUpDate}
-              onChange={(e) => updateField("followUpDate", e.target.value)}
+              value={form.followUpDate}
+              onChange={(e) => updateField("followUpDate", (e.target as HTMLInputElement).value)}
             />
           </div>
         </div>
@@ -394,13 +483,13 @@ export default function PrescriptionDetailPage() {
 
       {/* Action Bar */}
       <div className="flex items-center justify-end gap-3 pb-6">
-        <Button variant="ghost" size="md" onClick={() => {}}>
+        <Button variant="ghost" size="md" onClick={() => router.back()}>
           Cancel
         </Button>
-        <Button variant="outline" size="md" onClick={handleSaveDraft}>
-          Save as Draft
+        <Button variant="outline" size="md" onClick={() => handleSave(false)} disabled={saving}>
+          {saving ? "Saving..." : "Save Changes"}
         </Button>
-        <Button variant="primary" size="md" leftIcon={PrinterIcon} onClick={handleSavePrint}>
+        <Button variant="primary" size="md" leftIcon={PrinterIcon} onClick={() => handleSave(true)} disabled={saving}>
           Save & Print
         </Button>
       </div>

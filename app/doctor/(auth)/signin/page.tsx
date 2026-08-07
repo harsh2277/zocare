@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "@/lib/auth";
 
 export default function DoctorSigninPage() {
   const router = useRouter();
@@ -19,24 +19,13 @@ export default function DoctorSigninPage() {
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
-    const { data: doctor, error: docErr } = await (supabase
-      .from("doctors")
-      .select("id, email, full_name, specialization")
-      .eq("email", email.trim())
-      .maybeSingle() as any);
-
-    if (docErr || !doctor) {
+    try {
+      await signIn("doctor", email, password);
+      router.replace("/doctor/queue");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in.");
       setLoading(false);
-      setError("Doctor email address not found in clinic records.");
-      return;
     }
-
-    localStorage.setItem("doctor_id", doctor.id);
-    localStorage.setItem("doctor_name", doctor.full_name);
-    localStorage.setItem("doctor_specialization", doctor.specialization || "Cardiologist");
-    setLoading(false);
-    router.push("/doctor/dashboard");
   };
 
   return (
@@ -55,7 +44,7 @@ export default function DoctorSigninPage() {
             </label>
             <Input
               type="text"
-              placeholder="e.g. sarah.ahmed@zocare.health"
+              placeholder="e.g. doctor@gmail.com"
               value={email}
               onChange={(e) => setEmail((e.target as HTMLInputElement).value)}
               className="!rounded-lg border-[#cbd5e1] focus:border-[#086f6c] focus:ring-[#086f6c]/20 py-3 text-base"
@@ -105,7 +94,9 @@ export default function DoctorSigninPage() {
 
         <button
           type="button"
-          className="w-full bg-[#eaebed] hover:bg-[#e2e4e7] text-[#1e293b] py-3.5 px-4 font-bold transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer"
+          disabled
+          title="Coming soon"
+          className="w-full bg-[#eaebed] text-[#94a3b8] py-3.5 px-4 font-bold flex items-center justify-center gap-2.5 cursor-not-allowed opacity-70"
           style={{ borderRadius: '8px' }}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -126,7 +117,7 @@ export default function DoctorSigninPage() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span className="text-sm font-bold text-[#1e293b]">Continue with Google</span>
+          <span className="text-sm font-bold">Continue with Google (Coming soon)</span>
         </button>
 
         <p className="text-sm text-[#64748b] text-center mt-6">

@@ -1,107 +1,123 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { HugeiconsIcon } from "@hugeicons/react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Clock01Icon,
-  PlayIcon
-} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Clock01Icon, PrescriptionIcon } from "@hugeicons/core-free-icons";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/client";
 
-type QueueEntry = {
+type QueueStatus = "waiting" | "in_progress" | "completed" | "skipped";
+
+type QueueCard = {
   id: string;
-  token: number;
-  name: string;
-  age: number;
-  gender: string;
-  checkedIn: string;
+  appointmentId: string | null;
+  token_number: number;
+  status: string;
+  checked_in_at: string | null;
+  visitType: string;
+  patientName: string;
+  patientId: string;
+  ageSex: string;
   complaint: string;
-  waitMins: number;
-  status: "waiting" | "in_progress" | "completed" | "skipped";
-  type: string;
 };
 
-import { createClient } from "@/lib/supabase/client";
+const columns: { key: QueueStatus; label: string; badgeVariant: "warning" | "primary" | "success" | "neutral" }[] = [
+  { key: "waiting", label: "Waiting Queue", badgeVariant: "warning" },
+  { key: "in_progress", label: "In Consultation Queue", badgeVariant: "primary" },
+  { key: "completed", label: "Completed Queue", badgeVariant: "success" },
+  { key: "skipped", label: "Skipped Queue", badgeVariant: "neutral" },
+];
+
+function tokenLabel(n: number) {
+  return `TK-${String(n).padStart(3, "0")}`;
+}
+
+function waitMin(checkedInAt: string | null): string {
+  if (!checkedInAt) return "—";
+  return `${Math.floor((Date.now() - new Date(checkedInAt).getTime()) / 60000)} min`;
+}
+
+function ageSex(dob: string | null, gender: string | null): string {
+  if (!dob) return "?";
+  const age = Math.floor((Date.now() - new Date(dob).getTime()) / 31536000000);
+  return `${age}${gender === "male" ? "M" : gender === "female" ? "F" : ""}`;
+}
+
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function visitBadgeVariant(type: string): "primary" | "neutral" | "info" | "warning" | "error" {
+  const map: Record<string, "primary" | "neutral" | "info" | "warning" | "error"> = {
+    follow_up: "info", consultation: "neutral", emergency: "error", procedure: "warning",
+  };
+  return map[type] ?? "neutral";
+}
+
+function visitLabel(type: string): string {
+  const map: Record<string, string> = {
+    follow_up: "Follow-up", consultation: "Consultation", emergency: "Emergency", procedure: "Procedure",
+  };
+  return map[type] ?? type;
+}
+
+function cardStatus(status: string): QueueStatus {
+  if (status === "skipped") return "skipped";
+  if (status === "in_progress" || status === "called") return "in_progress";
+  if (status === "completed") return "completed";
+  return "waiting";
+}
 
 export default function DoctorQueuePage() {
   const router = useRouter();
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [cards, setCards] = useState<QueueCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
 
   const getDoctorId = () => {
     const stored = localStorage.getItem("doctor_id");
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (stored && uuidRegex.test(stored)) {
-      return stored;
-    }
-    return "d1000000-0000-0000-0000-000000000001";
+    return stored && uuidRegex.test(stored) ? stored : null;
   };
 
   const loadQueue = async () => {
+    const docId = getDoctorId();
+    if (!docId) {
+      router.push("/doctor/signin");
+      return;
+    }
+
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
-    const docId = getDoctorId();
 
-    const { data, error } = await (supabase
+    const { data } = await supabase
       .from("queue_entries")
-      .select(`
-        id,
-        token_number,
-        status,
-        checked_in_at,
-        notes,
-        patients (
-          full_name,
-          date_of_birth,
-          gender
-        ),
-        appointments (
-          type,
-          chief_complaint
-        )
-      `)
+      .select(`id, appointment_id, token_number, status, checked_in_at, notes,
+        patients(patient_id, full_name, date_of_birth, gender),
+        appointments(type, chief_complaint)`)
       .eq("doctor_id", docId)
       .eq("queue_date", today)
-      .order("token_number") as any);
+      .order("token_number");
 
-    if (data && !error) {
-      const mapped: QueueEntry[] = data.map((item: any) => {
-        const birthDate = item.patients?.date_of_birth;
-        let age = 0;
-        if (birthDate) {
-          age = Math.floor((Date.now() - new Date(birthDate).getTime()) / 31536000000);
-        }
-        
-        let waitMins = 0;
-        if (item.checked_in_at) {
-          waitMins = Math.floor((Date.now() - new Date(item.checked_in_at).getTime()) / 60000);
-        }
+    const rows = (data as unknown as {
+      id: string; appointment_id: string | null; token_number: number; status: string; checked_in_at: string | null; notes: string | null;
+      patients: { patient_id: string; full_name: string; date_of_birth: string | null; gender: string | null } | null;
+      appointments: { type: string; chief_complaint: string | null } | null;
+    }[]) ?? [];
 
-        const checkedInTime = item.checked_in_at
-          ? new Date(item.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : "09:00 AM";
-
-        return {
-          id: item.id,
-          token: item.token_number,
-          name: item.patients?.full_name ?? "Unknown",
-          age: age,
-          gender: item.patients?.gender === "male" ? "M" : item.patients?.gender === "female" ? "F" : "O",
-          checkedIn: checkedInTime,
-          complaint: item.appointments?.chief_complaint ?? item.notes ?? "No complaint",
-          waitMins: waitMins < 0 ? 0 : waitMins,
-          status: item.status,
-          type: item.appointments?.type === "consultation" ? "OPD" :
-                item.appointments?.type === "follow_up" ? "Follow-up" :
-                item.appointments?.type === "emergency" ? "Emergency" : "Routine"
-        };
-      });
-      setQueue(mapped);
-    }
+    setCards(rows.map((r) => ({
+      id: r.id,
+      appointmentId: r.appointment_id,
+      token_number: r.token_number,
+      status: r.status,
+      checked_in_at: r.checked_in_at,
+      visitType: r.appointments?.type ?? "consultation",
+      patientName: r.patients?.full_name ?? "—",
+      patientId: r.patients?.patient_id ?? "—",
+      ageSex: ageSex(r.patients?.date_of_birth ?? null, r.patients?.gender ?? null),
+      complaint: r.appointments?.chief_complaint ?? r.notes ?? "No complaint noted",
+    })));
     setLoading(false);
   };
 
@@ -115,196 +131,136 @@ export default function DoctorQueuePage() {
     };
   }, []);
 
-  const callPatient = async (id: string) => {
+  const startConsultation = async (card: QueueCard) => {
     const supabase = createClient();
 
-    // 1. Mark any currently "in_progress" consultation as completed first
-    const currentActive = queue.find((e) => e.status === "in_progress");
-    if (currentActive && currentActive.id !== id) {
-      await (supabase
-        .from("queue_entries") as any)
+    const currentActive = cards.find((c) => c.status === "in_progress");
+    if (currentActive && currentActive.id !== card.id) {
+      await (supabase.from("queue_entries") as any)
         .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", currentActive.id);
     }
 
-    // 2. Set this consultation to "in_progress"
-    await (supabase
-      .from("queue_entries") as any)
-      .update({ status: "in_progress" })
-      .eq("id", id);
+    await (supabase.from("queue_entries") as any).update({ status: "in_progress" }).eq("id", card.id);
 
-    localStorage.setItem("active_consultation_id", id);
+    localStorage.setItem("active_consultation_id", card.id);
     window.dispatchEvent(new Event("active_consultation_changed"));
     router.push("/doctor/prescription");
   };
 
-  const skipPatient = async (id: string) => {
-    const supabase = createClient();
-    await (supabase
-      .from("queue_entries") as any)
-      .update({ status: "skipped" })
-      .eq("id", id);
-
-    window.dispatchEvent(new Event("active_consultation_changed"));
+  const resumeConsultation = () => {
+    router.push("/doctor/prescription");
   };
 
-  const current = queue.find((e) => e.status === "in_progress");
-  const completed = queue.filter((e) => e.status === "completed");
-  const totalDone = completed.length;
-  const totalCount = queue.length;
+  const getColumnCards = (col: QueueStatus) => cards.filter((c) => cardStatus(c.status) === col);
 
-  const filteredQueue = queue.filter((row) => {
-    if (!statusFilter) return true;
-    return row.status === statusFilter;
-  });
-
-  const getStatusBadge = (status: QueueEntry["status"]) => {
-    const maps = {
-      completed: { label: "Done", cls: "bg-[#d1fae5] text-[#10b981]" },
-      in_progress: { label: "In Consultation", cls: "bg-[#ccf2f2] text-[#0b6e6e]" },
-      waiting: { label: "Waiting", cls: "bg-[#fef3c7] text-[#f59e0b]" },
-      skipped: { label: "Skipped", cls: "bg-[#f1f5f9] text-[#647589]" }
-    };
-    const c = maps[status];
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${c.cls}`}>
-        {c.label}
-      </span>
-    );
-  };
+  const totalCount = cards.length;
+  const totalDone = cards.filter((c) => cardStatus(c.status) === "completed").length;
+  const current = cards.find((c) => cardStatus(c.status) === "in_progress");
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center animate-pulse">
-          <div className="h-6 bg-neutral-100 rounded w-1/4" />
-          <div className="h-4 bg-neutral-100 rounded w-1/6" />
+      <div className="space-y-5">
+        <div className="h-7 w-56 bg-neutral-100 rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <Card key={i} className="h-64 animate-pulse" />)}
         </div>
-        <Card className="p-8 text-center text-sm text-neutral-400 animate-pulse">Loading live queue...</Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header Row */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+    <div className="space-y-5">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
           <h1 className="text-xl font-bold text-neutral-900">Patient Queue</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
             Serving {totalDone + (current ? 1 : 0)} of {totalCount} patients
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-neutral-500">
-          <HugeiconsIcon icon={Clock01Icon} className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Avg. consultation: 12 min</span>
-        </div>
       </div>
-      <Card padding="none" className="w-full overflow-hidden">
-        <div className="flex justify-between items-center px-5 py-4 border-b border-neutral-100">
-          <h2 className="text-sm font-bold text-neutral-800">Today's Live Queue</h2>
-          <div className="flex items-center gap-2">
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              options={[
-                { value: "", label: "All Status" },
-                { value: "waiting", label: "Waiting" },
-                { value: "in_progress", label: "In Consultation" },
-                { value: "completed", label: "Completed" },
-                { value: "skipped", label: "Skipped" },
-              ]}
-              className="text-sm py-1.5 min-w-[120px]"
-            />
-          </div>
-        </div>
 
-        <div className="overflow-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-100 bg-neutral-50">
-                {["Token", "Patient", "Age/Gender", "Checked In", "Wait Time", "Complaint", "Status", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-neutral-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {filteredQueue.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-neutral-400">
-                    No patients in the queue matching this filter.
-                  </td>
-                </tr>
-              ) : (
-                filteredQueue.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={`text-sm ${row.status === "in_progress" ? "bg-[#f4fbfb]" : ""}`}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 min-h-[calc(100vh-220px)]">
+        {columns.map((col) => {
+          const colCards = getColumnCards(col.key);
+          return (
+            <Card key={col.key} padding="none" className="flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-neutral-800">{col.label}</h3>
+                  <Badge variant={col.badgeVariant}>{colCards.length}</Badge>
+                </div>
+              </div>
+
+              <div className="flex-1 p-3 space-y-3 overflow-y-auto">
+                {colCards.map((card) => (
+                  <Card
+                    key={card.id}
+                    className={`hover:border-neutral-300 transition-colors ${
+                      card.visitType === "emergency" ? "border-error-300 bg-error-50/20" : ""
+                    }`}
                   >
-                    <td className="px-4 py-3 text-xs font-mono font-semibold text-neutral-500">
-                      TK-{String(row.token).padStart(3, "0")}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-neutral-800 whitespace-nowrap">
-                      {row.name}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {row.age}{row.gender}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
-                      {row.checkedIn}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {row.status === "completed" ? "—" : `${row.waitMins} min`}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500 max-w-[200px] truncate" title={row.complaint}>
-                      {row.complaint}
-                    </td>
-                    <td className="px-4 py-3">
-                      {getStatusBadge(row.status)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {row.status === "waiting" && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            leftIcon={PlayIcon}
-                            onClick={() => callPatient(row.id)}
-                          >
-                            Start Consultation
-                          </Button>
-                        )}
-                        {row.status === "in_progress" && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => router.push("/doctor/prescription")}
-                          >
-                            Resume Consultation
-                          </Button>
-                        )}
-                        {row.status === "skipped" && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            leftIcon={PlayIcon}
-                            onClick={() => callPatient(row.id)}
-                          >
-                            Start Consultation
-                          </Button>
-                        )}
-                        {row.status === "completed" && (
-                          <span className="text-xs text-neutral-400 font-medium">No actions</span>
-                        )}
+                    <div className="flex items-start justify-between mb-2">
+                      <span className={`text-2xl font-black ${card.visitType === "emergency" ? "text-error-600" : "text-neutral-800"}`}>
+                        {tokenLabel(card.token_number)}
+                      </span>
+                      <Badge variant={visitBadgeVariant(card.visitType)}>{visitLabel(card.visitType)}</Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ${
+                        card.visitType === "emergency" ? "bg-error-600" : "bg-primary-600"
+                      }`}>
+                        {getInitials(card.patientName)}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                      <p className="text-sm font-semibold text-neutral-800 truncate">{card.patientName}</p>
+                    </div>
+                    <p className="text-xs text-neutral-400 mb-3 ml-8">{card.patientId} · {card.ageSex}</p>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
+                      <p className="text-xs text-neutral-500 truncate flex-1" title={card.complaint}>{card.complaint}</p>
+                      <div className="flex items-center gap-1 text-xs text-warning-600 shrink-0 ml-2">
+                        <HugeiconsIcon icon={Clock01Icon} className="w-3.5 h-3.5" />
+                        <span>{waitMin(card.checked_in_at)}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {(col.key === "waiting" || col.key === "skipped") && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <button
+                          onClick={() => startConsultation(card)}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-md py-2 transition-colors"
+                        >
+                          <HugeiconsIcon icon={PrescriptionIcon} className="w-3.5 h-3.5" />
+                          {col.key === "skipped" ? "Recall & Start" : "Start Consultation"}
+                        </button>
+                      </div>
+                    )}
+                    {col.key === "in_progress" && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <button
+                          onClick={resumeConsultation}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-md py-2 transition-colors"
+                        >
+                          <HugeiconsIcon icon={PrescriptionIcon} className="w-3.5 h-3.5" />
+                          Resume Consultation
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+
+                {colCards.length === 0 && (
+                  <div className="flex items-center justify-center h-24 text-xs text-neutral-400">
+                    No patients
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

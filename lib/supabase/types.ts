@@ -7,6 +7,37 @@
 export type Database = {
   public: {
     Tables: {
+      users: {
+        Row: {
+          id: string;
+          auth_user_id: string | null;
+          full_name: string;
+          email: string;
+          phone: string | null;
+          role: "doctor" | "receptionist" | "patient" | "admin";
+          specialization: string | null;
+          registration_no: string | null;
+          avatar_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          auth_user_id?: string | null;
+          full_name: string;
+          email: string;
+          phone?: string | null;
+          role: "doctor" | "receptionist" | "patient" | "admin";
+          specialization?: string | null;
+          registration_no?: string | null;
+          avatar_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
+      };
       doctors: {
         Row: {
           id: string;

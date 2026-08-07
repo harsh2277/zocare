@@ -1,10 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
 
 const specializationOptions = [
   { value: "", label: "Select..." },
@@ -17,7 +15,6 @@ const specializationOptions = [
 ];
 
 export default function DoctorSignupPage() {
-  const router = useRouter();
   const [formData, setFormData] = useState({
     fullName: "",
     registrationNo: "",
@@ -52,31 +49,11 @@ export default function DoctorSignupPage() {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
-    setLoading(true);
-    const supabase = createClient();
-    const { data: newDoc, error: insertErr } = await (supabase
-      .from("doctors") as any)
-      .insert({
-        full_name: formData.fullName.trim(),
-        email: formData.email.trim(),
-        specialization: formData.specialization,
-        registration_no: formData.registrationNo.trim(),
-        is_active: true
-      })
-      .select("id")
-      .single() as any;
-
-    if (insertErr) {
-      setLoading(false);
-      setErrors({ form: "Error registering doctor: " + insertErr.message });
-      return;
-    }
-
-    localStorage.setItem("doctor_id", newDoc.id);
-    localStorage.setItem("doctor_name", formData.fullName.trim());
-    localStorage.setItem("doctor_specialization", formData.specialization);
-    setLoading(false);
-    router.push("/doctor/dashboard");
+    // Self-registration is closed during the pilot: the clinic runs on the two
+    // provisioned accounts only (see supabase/seed.sql).
+    setErrors({
+      form: "Registration is currently closed. Sign in with the doctor account provided by your clinic administrator.",
+    });
   };
 
   return (
@@ -86,6 +63,10 @@ export default function DoctorSignupPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#1e293b] tracking-tight">Create Doctor Account</h1>
           <p className="text-sm text-[#64748b] mt-1.5">Register to join the OPD system</p>
+          <p className="mt-4 text-xs font-semibold text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-lg px-3 py-2.5">
+            Self-registration is closed during the pilot. Accounts are issued by your clinic
+            administrator — <Link href="/doctor/signin" className="underline">sign in instead</Link>.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -199,7 +180,9 @@ export default function DoctorSignupPage() {
 
         <button
           type="button"
-          className="w-full bg-[#eaebed] hover:bg-[#e2e4e7] text-[#1e293b] py-3.5 px-4 font-bold transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer"
+          disabled
+          title="Coming soon"
+          className="w-full bg-[#eaebed] text-[#94a3b8] py-3.5 px-4 font-bold flex items-center justify-center gap-2.5 cursor-not-allowed opacity-70"
           style={{ borderRadius: '8px' }}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -220,7 +203,7 @@ export default function DoctorSignupPage() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span className="text-sm font-bold text-[#1e293b]">Continue with Google</span>
+          <span className="text-sm font-bold">Continue with Google (Coming soon)</span>
         </button>
 
         <p className="text-sm text-[#64748b] text-center mt-6">

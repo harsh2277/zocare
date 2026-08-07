@@ -8,6 +8,8 @@ import {
   CheckmarkCircle01Icon, Clock01Icon, UserIcon, Cancel01Icon
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { signOut } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 
 const pathMap: Record<string, { title: string; breadcrumb: string }> = {
   "/doctor/dashboard": { title: "Dashboard", breadcrumb: "Doctor Portal · Morning Clinic" },
@@ -48,14 +50,28 @@ export const DoctorTopBar = () => {
   const displaySub = meta?.[1].breadcrumb || "Doctor Portal · Morning Clinic";
   const unreadCount = notifications.filter((n) => n.unread).length;
 
-  const [docName, setDocName] = useState("Dr. Sarah Ahmed");
-  const [docSpec, setDocSpec] = useState("Cardiologist");
+  const [docName, setDocName] = useState("");
+  const [docSpec, setDocSpec] = useState("");
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     const name = localStorage.getItem("doctor_name");
     const spec = localStorage.getItem("doctor_specialization");
+    const doctorId = localStorage.getItem("doctor_id");
     if (name) setDocName(name);
     if (spec) setDocSpec(spec);
+
+    if (doctorId) {
+      const supabase = createClient();
+      supabase
+        .from("doctors")
+        .select("is_active")
+        .eq("id", doctorId)
+        .maybeSingle()
+        .then(({ data }: any) => {
+          if (data) setIsAvailable(data.is_active);
+        });
+    }
   }, []);
 
   const initials = docName
@@ -87,10 +103,18 @@ export const DoctorTopBar = () => {
             <span className="text-sm text-neutral-500 whitespace-nowrap">{displaySub}</span>
           </>
         )}
-        <span className="ml-1 inline-flex items-center gap-1 text-[10px] font-bold text-success-700 bg-success-50 border border-success-200 rounded-full px-2 py-0.5 whitespace-nowrap select-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-success-500 inline-block" />
-          Available
-        </span>
+        {isAvailable !== null && (
+          <span
+            className={`ml-1 inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap select-none border ${
+              isAvailable
+                ? "text-success-700 bg-success-50 border-success-200"
+                : "text-neutral-500 bg-neutral-100 border-neutral-200"
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${isAvailable ? "bg-success-500" : "bg-neutral-400"}`} />
+            {isAvailable ? "Available" : "Unavailable"}
+          </span>
+        )}
       </div>
 
       {/* Search */}
@@ -164,7 +188,10 @@ export const DoctorTopBar = () => {
                   variant="ghost"
                   leftIcon={LogoutSquare01Icon}
                   className="w-full text-error-600 hover:bg-error-50 justify-start"
-                  onClick={() => router.push("/doctor/signin")}
+                  onClick={async () => {
+                    await signOut();
+                    router.replace("/doctor/signin");
+                  }}
                 >
                   Log Out
                 </Button>

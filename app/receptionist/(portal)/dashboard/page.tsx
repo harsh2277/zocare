@@ -1,13 +1,12 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { UserGroupIcon, Clock01Icon, StethoscopeIcon, CheckmarkCircle01Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { UserGroupIcon, Clock01Icon, StethoscopeIcon, CheckmarkCircle01Icon, TaskDaily01Icon } from "@hugeicons/core-free-icons";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/app/empty-state";
 
 type QueueRow = {
   id: string;
@@ -15,7 +14,7 @@ type QueueRow = {
   status: string;
   checked_in_at: string | null;
   patients: { patient_id: string; full_name: string; date_of_birth: string | null; gender: string | null } | null;
-  doctors: { full_name: string } | null;
+  doctors: { id: string; full_name: string } | null;
   appointments: { type: string } | null;
 };
 
@@ -25,13 +24,10 @@ function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function ageFromDob(dob: string | null): string {
-  if (!dob) return "?";
-  return String(Math.floor((Date.now() - new Date(dob).getTime()) / 31536000000));
-}
-
 function ageSex(dob: string | null, gender: string | null): string {
-  return `${ageFromDob(dob)}${gender === "male" ? "M" : gender === "female" ? "F" : ""}`;
+  if (!dob) return "?";
+  const age = Math.floor((Date.now() - new Date(dob).getTime()) / 31536000000);
+  return `${age}${gender === "male" ? "M" : gender === "female" ? "F" : ""}`;
 }
 
 function waitMinutes(checkedInAt: string | null): string {
@@ -41,16 +37,6 @@ function waitMinutes(checkedInAt: string | null): string {
 
 function tokenLabel(n: number) {
   return `TK-${String(n).padStart(3, "0")}`;
-}
-
-function visitTypeBadge(type: string): { label: string; variant: "primary" | "neutral" | "success" | "info" | "warning" | "error" } {
-  const map: Record<string, { label: string; variant: "primary" | "neutral" | "success" | "info" | "warning" | "error" }> = {
-    follow_up: { label: "Follow-up", variant: "info" },
-    consultation: { label: "Consultation", variant: "neutral" },
-    emergency: { label: "Emergency", variant: "error" },
-    procedure: { label: "Procedure", variant: "warning" },
-  };
-  return map[type] ?? { label: type, variant: "neutral" };
 }
 
 function statusBadge(status: string): { label: string; variant: "primary" | "neutral" | "success" | "info" | "warning" | "error" } {
@@ -64,22 +50,10 @@ function statusBadge(status: string): { label: string; variant: "primary" | "neu
   return map[status] ?? { label: status, variant: "neutral" };
 }
 
-const doctorAvailability: Record<string, { status: string; sc: string; dot: string }> = {
-  "Dr. Sarah Ahmed": { status: "Available", sc: "text-success-600", dot: "bg-success-500" },
-  "Dr. Faisal Qureshi": { status: "In Consultation", sc: "text-primary-600", dot: "bg-primary-500" },
-  "Dr. Haris Ali": { status: "On Break", sc: "text-neutral-500", dot: "bg-neutral-400" },
-  "Dr. Mehreen Shah": { status: "Available", sc: "text-success-600", dot: "bg-success-500" },
-  "Dr. Aisha Lee": { status: "On Leave", sc: "text-neutral-500", dot: "bg-neutral-400" },
-  "Dr. Kamran Baig": { status: "Available", sc: "text-success-600", dot: "bg-success-500" },
-  "Dr. Maria Sanchez": { status: "Booked", sc: "text-primary-600", dot: "bg-primary-400" },
-};
-
 export default function ReceptionistDashboardPage() {
-  const router = useRouter();
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -90,7 +64,7 @@ export default function ReceptionistDashboardPage() {
           .from("queue_entries")
           .select(`id, token_number, status, checked_in_at,
             patients(patient_id, full_name, date_of_birth, gender),
-            doctors(full_name), appointments(type)`)
+            doctors(id, full_name), appointments(type)`)
           .eq("queue_date", today)
           .order("token_number"),
         supabase
@@ -106,18 +80,33 @@ export default function ReceptionistDashboardPage() {
     load();
   }, []);
 
-  const filtered = queue.filter((r) => !statusFilter || r.status === statusFilter);
   const totalToday = queue.length;
   const waiting = queue.filter((r) => r.status === "waiting").length;
   const inProgress = queue.filter((r) => r.status === "in_progress" || r.status === "called").length;
   const completed = queue.filter((r) => r.status === "completed").length;
 
+  const avgWaitMinutes = (() => {
+    const waitingRows = queue.filter((r) => r.status === "waiting" && r.checked_in_at);
+    if (waitingRows.length === 0) return null;
+    const total = waitingRows.reduce((sum, r) => sum + (Date.now() - new Date(r.checked_in_at as string).getTime()) / 60000, 0);
+    return Math.round(total / waitingRows.length);
+  })();
+  const completionRate = totalToday > 0 ? Math.round((completed / totalToday) * 100) : 0;
+
   const stats = [
-    { label: "Total Patients Today", value: String(totalToday), sub: "+8 from yesterday", subColor: "text-primary-600", icon: UserGroupIcon },
-    { label: "Currently Waiting", value: String(waiting), sub: "⬆ Avg. wait 18 min", subColor: "text-warning-500", icon: Clock01Icon },
-    { label: "In Consultation", value: String(inProgress), sub: "3 rooms active", subColor: "text-neutral-500", icon: StethoscopeIcon },
-    { label: "Completed", value: String(completed), sub: "67% completion rate", subColor: "text-success-600", icon: CheckmarkCircle01Icon },
+    { label: "Total Patients Today", value: String(totalToday), sub: "Since queue opened today", subColor: "text-primary-600", icon: UserGroupIcon },
+    { label: "Currently Waiting", value: String(waiting), sub: avgWaitMinutes !== null ? `⬆ Avg. wait ${avgWaitMinutes} min` : "No one waiting", subColor: "text-warning-500", icon: Clock01Icon },
+    { label: "In Consultation", value: String(inProgress), sub: `${inProgress} in progress now`, subColor: "text-neutral-500", icon: StethoscopeIcon },
+    { label: "Completed", value: String(completed), sub: `${completionRate}% completion rate`, subColor: "text-success-600", icon: CheckmarkCircle01Icon },
   ];
+
+  const doctorAvailability: Record<string, { status: string; sc: string; dot: string }> = {};
+  for (const row of queue) {
+    if (!row.doctors?.id) continue;
+    if (row.status === "in_progress" || row.status === "called") {
+      doctorAvailability[row.doctors.id] = { status: "In Consultation", sc: "text-primary-600", dot: "bg-primary-500" };
+    }
+  }
 
   if (loading) {
     return (
@@ -153,64 +142,59 @@ export default function ReceptionistDashboardPage() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-3 gap-5">
-        {/* Queue table */}
-        <Card padding="none" className="col-span-2 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Today's Queue */}
+        <Card padding="none" className="lg:col-span-2 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
             <h2 className="text-sm font-bold text-neutral-800">Today&apos;s Queue</h2>
-            <div className="flex items-center gap-2">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                options={[
-                  { value: "", label: "All Status" },
-                  { value: "waiting", label: "Waiting" },
-                  { value: "in_progress", label: "In Consultation" },
-                  { value: "completed", label: "Completed" },
-                ]}
-                className="text-sm py-1.5"
-              />
-              <Button variant="primary" size="md" leftIcon={PlusSignIcon} className="shrink-0" onClick={() => router.push("/receptionist/patients/new")}>Add Patient</Button>
-            </div>
+            <Link href="/receptionist/queue" className="text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors">
+              View Full Queue
+            </Link>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-neutral-100 bg-neutral-50">
-                {["TOKEN", "PATIENT", "AGE", "VISIT TYPE", "DOCTOR", "WAIT TIME", "STATUS"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-neutral-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-neutral-400">No queue entries for today</td></tr>
-              ) : filtered.map((row) => {
-                const vt = visitTypeBadge(row.appointments?.type ?? "consultation");
-                const st = statusBadge(row.status);
-                return (
-                  <tr key={row.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors">
-                    <td className="px-4 py-3 text-xs font-mono font-semibold text-neutral-500">{tokenLabel(row.token_number)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                          {getInitials(row.patients?.full_name ?? "?")}
+          {queue.length === 0 ? (
+            <EmptyState
+              icon={TaskDaily01Icon}
+              title="No patients in today's queue"
+              description="Check in a patient to see them appear here."
+            />
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-neutral-100 bg-neutral-50">
+                  {["TOKEN", "PATIENT", "AGE", "DOCTOR", "WAIT TIME", "STATUS"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-neutral-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map((row) => {
+                  const st = statusBadge(row.status);
+                  return (
+                    <tr key={row.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-mono font-semibold text-neutral-500">{tokenLabel(row.token_number)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                            {getInitials(row.patients?.full_name ?? "?")}
+                          </div>
+                          <span className="text-sm font-medium text-neutral-800 whitespace-nowrap">{row.patients?.full_name ?? "—"}</span>
                         </div>
-                        <span className="text-sm font-medium text-neutral-800 whitespace-nowrap">{row.patients?.full_name ?? "—"}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-neutral-600">{ageSex(row.patients?.date_of_birth ?? null, row.patients?.gender ?? null)}</td>
-                    <td className="px-4 py-3"><Badge variant={vt.variant}>{vt.label}</Badge></td>
-                    <td className="px-4 py-3 text-sm text-neutral-600 whitespace-nowrap">{row.doctors?.full_name ?? "—"}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-neutral-600">{waitMinutes(row.checked_in_at)}</td>
-                    <td className="px-4 py-3"><Badge variant={st.variant}>{st.label}</Badge></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="px-5 py-3 border-t border-neutral-100 text-xs text-neutral-400">
-            Showing {filtered.length} of {queue.length} entries · Today
-          </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-neutral-600">{ageSex(row.patients?.date_of_birth ?? null, row.patients?.gender ?? null)}</td>
+                      <td className="px-4 py-3 text-sm text-neutral-600 whitespace-nowrap">{row.doctors?.full_name ?? "—"}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-neutral-600">{waitMinutes(row.checked_in_at)}</td>
+                      <td className="px-4 py-3"><Badge variant={st.variant}>{st.label}</Badge></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          {queue.length > 0 && (
+            <div className="px-5 py-3 border-t border-neutral-100 text-xs text-neutral-400">
+              Showing {queue.length} entries · Today
+            </div>
+          )}
         </Card>
 
         {/* Doctors on Duty */}
@@ -220,7 +204,7 @@ export default function ReceptionistDashboardPage() {
           </div>
           <div className="divide-y divide-neutral-100">
             {doctors.map((doc) => {
-              const avail = doctorAvailability[doc.full_name] ?? { status: "Available", sc: "text-success-600", dot: "bg-success-500" };
+              const avail = doctorAvailability[doc.id] ?? { status: "Available", sc: "text-success-600", dot: "bg-success-500" };
               return (
                 <div key={doc.id} className="flex items-center gap-3 px-5 py-3">
                   <div className="relative shrink-0">

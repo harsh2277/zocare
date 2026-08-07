@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { signOut } from "@/lib/auth";
 import { CheckInModal } from "@/components/app/check-in-modal";
 
 const routeMeta: Record<string, { title: string; breadcrumb?: string }> = {
@@ -193,7 +194,10 @@ export const ReceptionistNavbar = () => {
                   variant="ghost"
                   leftIcon={LogoutSquare01Icon}
                   className="w-full text-error-600 hover:bg-error-50 justify-start"
-                  onClick={() => router.push("/receptionist/login")}
+                  onClick={async () => {
+                    await signOut();
+                    router.replace("/receptionist/login");
+                  }}
                 >
                   Log Out
                 </Button>

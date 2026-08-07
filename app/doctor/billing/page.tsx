@@ -16,8 +16,8 @@ import { useEffect } from "react";
 
 type Invoice = {
   id: string; invoiceNo: string; patient: string; initials: string;
-  service: string; extraItems: number; amount: number; paid: number;
-  status: string; date: string;
+  service: string; extraItems: number; amount: number; paid: number; discount: number;
+  status: string; date: string; createdAt: string | null; dueDate: string | null;
   itemsList?: { desc: string; qty: number; price: number }[];
 };
 
@@ -38,7 +38,7 @@ export default function DoctorBillingPage() {
       const { data, error } = await (supabase
         .from("billing_invoices")
         .select(`
-          id, invoice_no, subtotal, discount, tax, total, paid_amount, status, created_at,
+          id, invoice_no, subtotal, discount, tax, total, paid_amount, status, created_at, due_date,
           patients(full_name),
           billing_invoice_items(description, quantity, unit_price, total_price)
         `)
@@ -62,8 +62,11 @@ export default function DoctorBillingPage() {
             extraItems: Math.max(0, items.length - 1),
             amount: Number(inv.total),
             paid: Number(inv.paid_amount),
+            discount: Number(inv.discount) || 0,
             status: inv.status,
             date: inv.created_at ? new Date(inv.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            createdAt: inv.created_at,
+            dueDate: inv.due_date,
             itemsList: items
           };
         });
@@ -94,6 +97,24 @@ export default function DoctorBillingPage() {
     alert(`Downloading ${inv.invoiceNo} PDF to your local downloads directory...`);
   };
 
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const invoicesThisMonth = invoices.filter((inv) => inv.createdAt && new Date(inv.createdAt) >= startOfMonth);
+  const totalRevenue = invoicesThisMonth.reduce((sum, inv) => sum + inv.paid, 0);
+  const pendingInvoices = invoices.filter((inv) => inv.status === "issued" || inv.status === "partial");
+  const pendingDues = pendingInvoices.reduce((sum, inv) => sum + (inv.amount - inv.paid), 0);
+  const paidInvoicesCount = invoicesThisMonth.filter((inv) => inv.status === "paid").length;
+  const overdueInvoices = invoices.filter((inv) =>
+    inv.dueDate && new Date(inv.dueDate) < now && inv.status !== "paid" && inv.status !== "cancelled" && inv.status !== "refunded"
+  );
+
+  const summaryStats = [
+    { label: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, sub: "This month", color: "text-neutral-500", iconText: "₹" },
+    { label: "Pending Dues", value: `₹${pendingDues.toLocaleString()}`, sub: `${pendingInvoices.length} invoice${pendingInvoices.length === 1 ? "" : "s"}`, color: "text-amber-600", iconText: "!" },
+    { label: "Paid Invoices", value: String(paidInvoicesCount), sub: "This month", color: "text-emerald-600", iconText: "✓" },
+    { label: "Overdue Alerts", value: String(overdueInvoices.length), sub: "Requires follow up", color: "text-red-650", iconText: "⚠" },
+  ];
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -103,12 +124,7 @@ export default function DoctorBillingPage() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total Revenue", value: "₹1,24,500", sub: "This month", color: "text-neutral-500", iconText: "₹" },
-          { label: "Pending Dues", value: "₹18,200", sub: "3 invoices", color: "text-amber-600", iconText: "!" },
-          { label: "Paid Invoices", value: "89", sub: "This month", color: "text-emerald-600", iconText: "✓" },
-          { label: "Overdue Alerts", value: "4", sub: "Requires follow up", color: "text-red-650", iconText: "⚠" },
-        ].map((s) => (
+        {summaryStats.map((s) => (
           <Card key={s.label}>
             <div className="flex items-start justify-between mb-3">
               <p className="text-xs text-neutral-500 font-medium leading-tight">{s.label}</p>
@@ -255,7 +271,7 @@ export default function DoctorBillingPage() {
                 </div>
                 <div className="flex justify-between text-neutral-500">
                   <span>Discount</span>
-                  <span>₹0</span>
+                  <span>₹{selectedInvoice.discount}</span>
                 </div>
                 <div className="flex justify-between font-bold text-sm border-t border-neutral-200/60 pt-2 mt-2 text-neutral-900">
                   <span>Total Amount</span>

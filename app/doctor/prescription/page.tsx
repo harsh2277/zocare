@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { createClient } from "@/lib/supabase/client";
+import { EmptyState } from "@/components/app/empty-state";
 import {
   ArrowLeft01Icon,
   Search01Icon,
@@ -15,7 +16,8 @@ import {
   CheckmarkCircle01Icon,
   Cancel01Icon,
   ArrowRight01Icon,
-  Tick01Icon
+  Tick01Icon,
+  File01Icon,
 } from "@hugeicons/core-free-icons";
 
 type MedicineRow = {
@@ -51,6 +53,8 @@ export default function DoctorPrescriptionPage() {
   const router = useRouter();
 
   const [activePatient, setActivePatient] = useState<any>(null);
+  const [doctorInfo, setDoctorInfo] = useState<{ full_name: string; specialization: string | null; registration_no: string | null } | null>(null);
+  const [patientHistory, setPatientHistory] = useState<{ id: string; date: string; title: string; desc: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const getDoctorId = () => {
@@ -59,27 +63,32 @@ export default function DoctorPrescriptionPage() {
     if (stored && uuidRegex.test(stored)) {
       return stored;
     }
-    return "d1000000-0000-0000-0000-000000000001";
+    return null;
   };
 
   const loadActiveConsultation = async () => {
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
     const docId = getDoctorId();
-    
+
     const activeId = localStorage.getItem("active_consultation_id");
+    if (!activeId && !docId) {
+      router.push("/doctor/signin");
+      return;
+    }
+
     let query = supabase
       .from("queue_entries")
       .select(`id, token_number, checked_in_at, notes, appointment_id, patient_id, doctor_id,
         patients(id, patient_id, full_name, date_of_birth, gender, allergies, notes, blood_group),
         appointments(id, type, chief_complaint)`);
-        
+
     if (activeId) {
       query = query.eq("id", activeId);
     } else {
-      query = query.eq("doctor_id", docId).eq("queue_date", today).eq("status", "in_progress");
+      query = query.eq("doctor_id", docId as string).eq("queue_date", today).eq("status", "in_progress");
     }
-    
+
     const { data, error } = await (query.maybeSingle() as any);
 
     if (data && !error) {
@@ -110,6 +119,34 @@ export default function DoctorPrescriptionPage() {
       if (data.appointments?.chief_complaint) {
         setChiefComplaint(data.appointments.chief_complaint);
       }
+
+      const doctorId = data.doctor_id ?? docId;
+      if (doctorId) {
+        const { data: doctorData } = await (supabase
+          .from("doctors")
+          .select("full_name, specialization, registration_no")
+          .eq("id", doctorId)
+          .maybeSingle() as any);
+        if (doctorData) setDoctorInfo(doctorData);
+      }
+
+      const patientUuid = data.patients?.id;
+      if (patientUuid) {
+        const { data: historyData } = await (supabase
+          .from("prescriptions")
+          .select("id, diagnosis, chief_complaint, notes, created_at")
+          .eq("patient_id", patientUuid)
+          .order("created_at", { ascending: false })
+          .limit(10) as any);
+        setPatientHistory(
+          (historyData ?? []).map((rx: any) => ({
+            id: rx.id,
+            date: rx.created_at ? new Date(rx.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            title: rx.diagnosis || rx.chief_complaint || "Consultation",
+            desc: rx.notes || rx.chief_complaint || "No notes recorded.",
+          }))
+        );
+      }
     }
     setLoading(false);
   };
@@ -119,21 +156,11 @@ export default function DoctorPrescriptionPage() {
   }, []);
 
   // Textarea state
-  const [chiefComplaint, setChiefComplaint] = useState(
-    "Fever since 3 days, body ache and dry cough..."
-  );
-  const [doctorsAdvice, setDoctorsAdvice] = useState(
-    "Drink plenty of warm fluids. Complete the antibiotic course. Avoid cold drinks."
-  );
+  const [chiefComplaint, setChiefComplaint] = useState("");
+  const [doctorsAdvice, setDoctorsAdvice] = useState("");
 
   // Symptoms state
-  const [symptoms, setSymptoms] = useState([
-    "Fever",
-    "Cough",
-    "Cold",
-    "Body Ache",
-    "Headache",
-  ]);
+  const [symptoms, setSymptoms] = useState<string[]>([]);
   const [newSymptom, setNewSymptom] = useState("");
   const [showAddSymptomInput, setShowAddSymptomInput] = useState(false);
 
@@ -150,10 +177,7 @@ export default function DoctorPrescriptionPage() {
   };
 
   // Medicine Rows state
-  const [medicines, setMedicines] = useState<MedicineRow[]>([
-    { name: "Tab. Augmentin 625mg", dosage: "1 tab", m: true, a: false, n: true, days: 5, instructions: "After Food" },
-    { name: "Syp. Ascoril D", dosage: "5ml", m: true, a: true, n: true, days: 3, instructions: "Before Food" },
-  ]);
+  const [medicines, setMedicines] = useState<MedicineRow[]>([]);
 
   const [showAddMedicineModal, setShowAddMedicineModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
@@ -238,13 +262,14 @@ export default function DoctorPrescriptionPage() {
 
   // Lab Tests state
   const [labTests, setLabTests] = useState<LabTest[]>([
-    { id: "cbc", name: "CBC", category: "Haematology", checked: true },
-    { id: "hba1c", name: "HbA1c", category: "Diabetes", checked: true },
+    { id: "cbc", name: "CBC", category: "Haematology", checked: false },
+    { id: "hba1c", name: "HbA1c", category: "Diabetes", checked: false },
     { id: "lipid", name: "Lipid Profile", category: "Cardiology", checked: false },
     { id: "lft", name: "LFT", category: "Liver", checked: false },
     { id: "kft", name: "KFT", category: "Kidney", checked: false },
-    { id: "sugar", name: "Blood Sugar F/PP", category: "Diabetes", checked: true },
+    { id: "sugar", name: "Blood Sugar F/PP", category: "Diabetes", checked: false },
   ]);
+  const [labTestSearch, setLabTestSearch] = useState("");
 
   const toggleLabTest = (id: string) => {
     setLabTests(labTests.map((t) => (t.id === id ? { ...t, checked: !t.checked } : t)));
@@ -255,7 +280,11 @@ export default function DoctorPrescriptionPage() {
   };
 
   // Follow-up Date
-  const [followUpDate, setFollowUpDate] = useState("2026-07-27");
+  const [followUpDate, setFollowUpDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  });
 
   const setQuickFollowUp = (days: number) => {
     const d = new Date();
@@ -394,14 +423,18 @@ export default function DoctorPrescriptionPage() {
           </div>
 
           {/* Right Details: Allergies */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-[#ef4444] tracking-wider">ALLERGIES:</span>
-            <div className="flex gap-1.5">
-              <span className="border border-red-200 text-red-500 bg-red-50/50 px-2.5 py-0.5 rounded-full text-xs font-semibold">Penicillin Allergy</span>
-              <span className="border border-orange-200 text-orange-500 bg-orange-50/50 px-2.5 py-0.5 rounded-full text-xs font-semibold">Diabetes</span>
-              <span className="border border-orange-200 text-orange-500 bg-orange-50/50 px-2.5 py-0.5 rounded-full text-xs font-semibold">Hypertension</span>
+          {activePatient.allergies && activePatient.allergies.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-[#ef4444] tracking-wider">ALLERGIES:</span>
+              <div className="flex gap-1.5">
+                {activePatient.allergies.map((a: string, i: number) => (
+                  <span key={i} className="border border-red-200 text-red-500 bg-red-50/50 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                    {a.trim()}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Main Workspace Frame */}
@@ -413,42 +446,25 @@ export default function DoctorPrescriptionPage() {
               <div className="px-4 py-3 bg-[#FBFCFD] border-b border-[#E2E8F0] shrink-0">
                 <h2 className="text-[13px] font-bold text-[#1E2940] tracking-wider uppercase">Patient History</h2>
               </div>
-              <div className="p-4 space-y-3 overflow-y-auto flex-1">
-                {[
-                  { date: "14 Jun 2024", title: "Viral Fever", desc: "Prescribed paracetamol and rest. Advised fluids." },
-                  { date: "02 May 2024", title: "Regular Health Checkup", desc: "Vitals normal. BP slightly elevated." },
-                  { date: "18 Jan 2024", title: "Acute Gastritis", desc: "Burning sensation in epigastric region." },
-                  { date: "08 Jan 2024", title: "Acute Gastritis", desc: "Burning sensation in epigastric region." },
-                ].map((h, i) => (
-                  <div key={i} className="p-3 border border-[#E2E8F0] rounded-xl bg-white space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-[#0B6E6E]">{h.date}</span>
-                      <span className="text-neutral-400">View</span>
+              {patientHistory.length === 0 ? (
+                <EmptyState
+                  icon={File01Icon}
+                  title="No past visits"
+                  description="Previous prescriptions for this patient will show up here."
+                />
+              ) : (
+                <div className="p-4 space-y-3 overflow-y-auto flex-1">
+                  {patientHistory.map((h) => (
+                    <div key={h.id} className="p-3 border border-[#E2E8F0] rounded-xl bg-white space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-[#0B6E6E]">{h.date}</span>
+                      </div>
+                      <h3 className="text-xs font-bold text-[#1E2940]">{h.title}</h3>
+                      <p className="text-xs text-[#647589] leading-relaxed">{h.desc}</p>
                     </div>
-                    <h3 className="text-xs font-bold text-[#1E2940]">{h.title}</h3>
-                    <p className="text-xs text-[#647589] leading-relaxed">{h.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Recent Lab Reports */}
-            <Card padding="none" className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-none shrink-0">
-              <div className="px-4 py-3 bg-[#FBFCFD] border-b border-[#E2E8F0]">
-                <h2 className="text-[13px] font-bold text-[#1E2940] tracking-wider uppercase">Recent Lab Reports</h2>
-              </div>
-              <div className="p-4 space-y-3">
-                {[
-                  { name: "CBC", val: "Hemoglobin: 12.4 g/dL" },
-                  { name: "Blood Sugar (Fasting)", val: "142 mg/dL" },
-                  { name: "ECG", val: "Normal Sinus Rhythm" },
-                ].map((r, i) => (
-                  <div key={i} className="p-3 border border-[#E2E8F0] rounded-xl bg-white">
-                    <h3 className="text-xs font-bold text-[#1E2940]">{r.name}</h3>
-                    <p className="text-xs text-[#647589] mt-0.5">{r.val}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </div>
 
@@ -633,13 +649,19 @@ export default function DoctorPrescriptionPage() {
                     <HugeiconsIcon icon={Search01Icon} className="w-4 h-4 text-neutral-400 absolute left-3 top-3.5" />
                     <input
                       type="text"
+                      value={labTestSearch}
+                      onChange={(e) => setLabTestSearch(e.target.value)}
                       placeholder="Search tests or packages..."
                       className="w-full pl-9 pr-4 py-2.5 border border-[#E2E8F0] rounded-lg bg-[#F8FAFC] text-sm focus:outline-none focus:border-[#0B6E6E]"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {labTests.map((t) => (
+                    {labTests.filter((t) =>
+                      !labTestSearch.trim() ||
+                      t.name.toLowerCase().includes(labTestSearch.trim().toLowerCase()) ||
+                      t.category.toLowerCase().includes(labTestSearch.trim().toLowerCase())
+                    ).map((t) => (
                       <div
                         key={t.id}
                         onClick={() => toggleLabTest(t.id)}
@@ -666,10 +688,10 @@ export default function DoctorPrescriptionPage() {
                     ))}
                   </div>
 
-                  <div className="flex justify-end pt-2">
-                    <button className="bg-[#0B6E6E] text-white px-4 py-2 rounded-lg font-bold text-xs tracking-wider uppercase hover:bg-[#095858] transition-colors flex items-center gap-1.5 active:scale-95">
-                      Save Reports
-                    </button>
+                  <div className="flex justify-end items-center pt-2">
+                    <span className="text-xs text-[#647589] font-medium">
+                      {labTests.filter((t) => t.checked).length} test{labTests.filter((t) => t.checked).length === 1 ? "" : "s"} selected — included on the printed prescription
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -757,9 +779,9 @@ export default function DoctorPrescriptionPage() {
             <p className="text-xs text-neutral-500">123, Health Avenue, Medical Zone</p>
           </div>
           <div className="text-right">
-            <h2 className="text-base font-bold text-neutral-900">Dr. Sarah Ahmed</h2>
-            <p className="text-xs text-neutral-600">MD - Cardiology Specialist</p>
-            <p className="text-[11px] text-neutral-500 mt-1">Reg No: KMC-104820</p>
+            <h2 className="text-base font-bold text-neutral-900">{doctorInfo?.full_name ?? "—"}</h2>
+            <p className="text-xs text-neutral-600">{doctorInfo?.specialization ?? ""}</p>
+            <p className="text-[11px] text-neutral-500 mt-1">{doctorInfo?.registration_no ? `Reg No: ${doctorInfo.registration_no}` : ""}</p>
           </div>
         </div>
 

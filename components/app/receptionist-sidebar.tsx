@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -8,21 +8,49 @@ import {
   DashboardSquare01Icon, UserGroupIcon, TaskDaily01Icon,
   PlusSignIcon, Menu01Icon, Cancel01Icon,
 } from "@hugeicons/core-free-icons";
+import { createClient } from "@/lib/supabase/client";
 
-const navItems = [
+type NavItem = { label: string; href: string; icon: typeof DashboardSquare01Icon; badge: number | null };
+
+const baseNavItems: NavItem[] = [
+  { label: "Queue",     href: "/receptionist/queue",     icon: TaskDaily01Icon,        badge: null },
   { label: "Dashboard", href: "/receptionist/dashboard", icon: DashboardSquare01Icon, badge: null },
-  { label: "Patients",  href: "/receptionist/patients",  icon: UserGroupIcon,          badge: 156  },
-  { label: "Queue",     href: "/receptionist/queue",     icon: TaskDaily01Icon,        badge: 8    },
+  { label: "Patients",  href: "/receptionist/patients",  icon: UserGroupIcon,          badge: null },
 ];
 
 export const ReceptionistSidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navItems, setNavItems] = useState<NavItem[]>(baseNavItems);
+
+  useEffect(() => {
+    const loadCounts = async () => {
+      const supabase = createClient();
+      const today = new Date().toISOString().slice(0, 10);
+      const [{ count: patientCount }, { count: queueCount }] = await Promise.all([
+        supabase.from("patients").select("id", { count: "exact", head: true }).eq("is_active", true),
+        supabase
+          .from("queue_entries")
+          .select("id", { count: "exact", head: true })
+          .eq("queue_date", today)
+          .in("status", ["waiting", "called", "in_progress"]),
+      ]);
+
+      setNavItems((items) =>
+        items.map((item) => {
+          if (item.href === "/receptionist/patients") return { ...item, badge: patientCount ?? null };
+          if (item.href === "/receptionist/queue") return { ...item, badge: queueCount ?? null };
+          return item;
+        })
+      );
+    };
+    loadCounts();
+  }, []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  const NavLink = ({ item }: { item: typeof navItems[0] }) => (
+  const NavLink = ({ item }: { item: NavItem }) => (
     <Link
       href={item.href}
       onClick={() => setMobileOpen(false)}
@@ -62,7 +90,7 @@ export const ReceptionistSidebar = () => {
       {/* Main Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-3 mb-3">Menu</p>
-        {navItems.map((item) => <NavLink key={item.href} item={item} />)}
+        {navItems.map((item: NavItem) => <NavLink key={item.href} item={item} />)}
       </nav>
     </div>
   );
